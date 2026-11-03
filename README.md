@@ -12,15 +12,11 @@ other files in the folder come along with it.
    `https://adafruit.github.io/arduino-board-index/package_adafruit_index.json`
 3. Open **Tools > Board > Boards Manager**, search for `Adafruit nRF52`, and click Install.
    It is a big download; wait for it to finish.
-4. Open **Tools > Manage Libraries** and install each of these by name. When one asks about
-   dependencies, choose **Install all**. Each takes a few seconds.
-   - `Adafruit ST7735 and ST7789 Library` (the screen)
-   - `Adafruit NeoPixel`
-   - `Adafruit LSM6DS`
-   - `Adafruit LIS3MDL`
-   - `Adafruit SHT31 Library`
-   - `Adafruit APDS9960 Library`
-   - `Adafruit BMP280 Library`
+4. Open **Tools > Manage Libraries**, search for `Adafruit Arcada Library`, and click
+   Install. When it asks about dependencies, choose **Install all**. That one install brings
+   in every library the CLUE sketches use. It downloads about fifty libraries, so give it a
+   few minutes; if the IDE is still showing "Processing" after the last one, quit and reopen
+   it. Everything is already installed at that point.
 
 You should now see **Adafruit CLUE** under Tools > Board > Adafruit nRF52 Boards.
 
