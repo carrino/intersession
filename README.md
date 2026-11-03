@@ -46,8 +46,8 @@ You should now see **Adafruit CLUE** under Tools > Board > Adafruit nRF52 Boards
   random moment, and if that lands in the middle of a sensor read, the sensor keeps holding
   the data line until something clocks it out. Resets do not clear it because the sensors
   keep their power. **Unplug the USB cable for ten seconds** and plug it back in. The
-  current sketch clears the bus by hand at startup and reboots itself if the loop ever
-  stops for five seconds, so this only bites old builds.
+  current sketch clears the bus by hand at startup and reboots itself within a couple of
+  seconds if the loop ever stops, logging what it was doing, so this only bites old builds.
 - **"Adafruit CLUE" is not in the board list:** step 3 of the setup did not finish.
 - **A `.h` file is not found:** step 4 did not finish, or the sketch was opened from a copy
   of the `.ino` file on its own instead of from its folder.

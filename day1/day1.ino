@@ -484,36 +484,47 @@ void setupDisplay() {
 
 // Runs in its own task twice a second. If loop() has not checked in for a second it is
 // stuck, almost certainly in an I2C transfer that will never finish. The radio is still
-// running, so say what it was doing, on the screen and over BLE, and keep that in a
-// register that survives the reset; the watchdog restarts the chip a few seconds later.
+// running, so over the next three ticks: say what it was doing, on the screen and over
+// BLE, and keep that in a register that survives the reset; hang up, so the page hears
+// at once instead of waiting out its link timeout; then reset the chip.
 void onStallCheck(TimerHandle_t timer) {
-  static bool reported = false;
-  if (reported || millis() - loopAliveMs < 1000) {
+  static int ticksStuck = 0;
+  if (millis() - loopAliveMs < 1000) {
+    ticksStuck = 0;
     return;
   }
-  reported = true;
-  char message[64];
-  snprintf(message, sizeof(message), "Stuck in %s, rebooting", STAGE_NAMES[stage]);
-  warn(message);
-  notify(find(logChar));  // the stuck loop will not flush it, so send it from here
-  sd_power_gpregret_clr(1, 0xFF);
-  sd_power_gpregret_set(1, stage);
-}
-
-// After a watchdog reset, say what the loop was stuck in. Runs before the radio starts,
-// while the retained register can still be read directly.
-void reportLastReset() {
-  if (readResetReason() & POWER_RESETREAS_DOG_Msk) {
+  ticksStuck++;
+  if (ticksStuck == 1) {
     char message[64];
-    snprintf(message, sizeof(message), "Rebooted: was stuck in %s", STAGE_NAMES[NRF_POWER->GPREGRET2 % STAGE_COUNT]);
+    snprintf(message, sizeof(message), "Stuck in %s, rebooting", STAGE_NAMES[stage]);
     warn(message);
+    notify(find(logChar));  // the stuck loop will not flush it, so send it from here
+    sd_power_gpregret_clr(1, 0xFF);
+    sd_power_gpregret_set(1, stage);
+  } else if (ticksStuck == 2) {
+    Bluefruit.disconnect(Bluefruit.connHandle());
+  } else {
+    NVIC_SystemReset();
   }
-  NRF_POWER->GPREGRET2 = 0;
 }
 
-// A hardware timer that resets the chip if loop() stops reporting in for five seconds, so
-// a hang (an I2C transfer that never finishes, say) costs a reboot rather than a dead
-// board, and the bus is cleared on the way back up. A delay() longer than that trips it.
+// After a reset, say why if it was ours. Runs before the radio starts, while the retained
+// register can still be read directly; the stall check left the stuck stage in it.
+void reportLastReset() {
+  uint8_t stuckIn = NRF_POWER->GPREGRET2;
+  NRF_POWER->GPREGRET2 = 0;
+  if (stuckIn != 0) {
+    char message[64];
+    snprintf(message, sizeof(message), "Rebooted: was stuck in %s", STAGE_NAMES[stuckIn % STAGE_COUNT]);
+    warn(message);
+  } else if (readResetReason() & POWER_RESETREAS_DOG_Msk) {
+    warn("Rebooted by the watchdog");
+  }
+}
+
+// The backstop behind the stall check: a hardware timer that resets the chip if loop()
+// stops reporting in for five seconds, even if the stall check itself is wedged. The bus
+// is cleared on the way back up. A delay() longer than five seconds trips it.
 void startWatchdog() {
   NRF_WDT->CONFIG = WDT_CONFIG_SLEEP_Run << WDT_CONFIG_SLEEP_Pos;  // keeps counting while asleep
   NRF_WDT->CRV = 5 * 32768;                                        // five seconds of its 32768 Hz clock
