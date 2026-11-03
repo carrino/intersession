@@ -34,8 +34,13 @@ You should now see **Adafruit CLUE** under Tools > Board > Adafruit nRF52 Boards
 
 ## When something goes wrong
 
-- **Upload fails or no port shows up:** double-click the small reset button on the CLUE.
-  The screen goes dark and a `CLUEBOOT` drive appears. Upload again.
+- **Tools > Port is greyed out and no `CLUEBOOT` drive appears after a double-click reset:**
+  the USB cable is charge-only. The board powers up on it but no data gets through. Swap
+  the cable. Keep a couple of known-good cables in the room.
+- **Upload fails:** double-click the small reset button on the CLUE. The screen goes dark
+  and a `CLUEBOOT` drive appears. Upload again.
+- **Upload succeeds but the sketch never starts:** Tools > SoftDevice must match the board.
+  Open `INFO_UF2.TXT` on the `CLUEBOOT` drive to see which version the board has.
 - **"Adafruit CLUE" is not in the board list:** step 3 of the setup did not finish.
 - **A `.h` file is not found:** step 4 did not finish, or the sketch was opened from a copy
   of the `.ino` file on its own instead of from its folder.
