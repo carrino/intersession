@@ -47,10 +47,6 @@ BLECharacteristic buttonsChar("c10e000b-5a7e-4a6b-9f3e-0b6f2d9a1c01");
 BLECharacteristic magFitChar("c10e000c-5a7e-4a6b-9f3e-0b6f2d9a1c01");
 BLECharacteristic pixelChar("c10e000d-5a7e-4a6b-9f3e-0b6f2d9a1c01");  // writable: red, green, blue bytes
 
-// The Nordic UART service: a serial port over BLE. Whatever logLine() prints shows up in
-// the UART tab of the Bluefruit LE Connect app, handy once the board is off the USB cable.
-BLEUart bleuart;
-
 // We send about 150 notifications a second across all characteristics. The SoftDevice
 // default queue holds just one, and notify() stalls for up to 100 ms when it is full.
 const int BLE_NOTIFY_QUEUE = 16;
@@ -207,14 +203,7 @@ void readMag() {
 // Refit the hard-iron offset from the readings so far. Turning the board through all
 // orientations gives it the whole sphere to work with.
 void fitMag() {
-  static bool announced = false;
-  if (magCalibration.solve() && !announced) {
-    char line[64];
-    snprintf(line, sizeof(line), "Mag offset %.1f %.1f %.1f, field %.1f uT", magCalibration.offset[0],
-             magCalibration.offset[1], magCalibration.offset[2], magCalibration.radius);
-    logLine(line);
-    announced = true;
-  }
+  magCalibration.solve();
   for (int i = 0; i < 3; i++) {
     readings.magFit[i] = magCalibration.offset[i];
   }
@@ -361,8 +350,7 @@ void checkSensors() {
 
 // Prints a sensor's name on the startup screen: green if it answered, red if not.
 void reportSensor(const char *name, bool found) {
-  Serial.print(name);
-  Serial.println(found ? "OK" : "not found");
+  Serial.printf("%s%s\n", name, found ? "OK" : "not found");
   arcada.display->setTextColor(found ? ARCADA_GREEN : ARCADA_RED);
   arcada.display->print(name);
 }
@@ -370,7 +358,7 @@ void reportSensor(const char *name, bool found) {
 void setupMic() {
   PDM.onReceive(onMicData);
   if (!PDM.begin(1, 16000)) {
-    logLine("Failed to start PDM");
+    Serial.println("Failed to start PDM");
   }
 }
 
@@ -401,7 +389,6 @@ void setupBle() {
   arcada.display->print("BLE: ");
   arcada.display->println(name);
 
-  bleuart.begin();        // its own service, so it goes before ours
   sensorService.begin();  // characteristics join the most recently begun service
   beginNotifyChar(quaternionChar, sizeof(readings.quaternion));
   beginNotifyChar(accelChar, sizeof(readings.accel));
@@ -421,10 +408,9 @@ void setupBle() {
   pixelChar.begin();
 
   // A 128-bit UUID nearly fills the 31-byte advertising packet, leaving only 8 characters
-  // for the name, so the name and UART go in the scan response, which scanners ask for right after.
+  // for the name, so the name goes in the scan response, which scanners ask for right after.
   Bluefruit.Advertising.addFlags(BLE_GAP_ADV_FLAGS_LE_ONLY_GENERAL_DISC_MODE);
   Bluefruit.Advertising.addService(sensorService);
-  Bluefruit.ScanResponse.addService(bleuart);
   Bluefruit.ScanResponse.addName();
   Bluefruit.Advertising.restartOnDisconnect(true);
   Bluefruit.Advertising.start(0);  // 0 = keep advertising until connected
@@ -490,12 +476,6 @@ bool every(uint32_t periodMs, uint32_t &lastMs) {
   return true;
 }
 
-// Prints to the USB serial port and to the BLE UART, so it is visible with or without a cable.
-void logLine(const char *message) {
-  Serial.println(message);
-  bleuart.println(message);
-}
-
 void copyVector(float dest[3], const sensors_vec_t &v) {
   dest[0] = v.x;
   dest[1] = v.y;
@@ -503,7 +483,7 @@ void copyVector(float dest[3], const sensors_vec_t &v) {
 }
 
 void halt(const char *message) {
-  logLine(message);
+  Serial.println(message);
   arcada.display->setTextColor(ARCADA_RED);
   arcada.display->println(message);
   while (true) {
