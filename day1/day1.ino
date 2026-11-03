@@ -13,6 +13,7 @@
 #include <Adafruit_APDS9960.h>
 #include <Adafruit_BMP280.h>
 #include <PDM.h>
+#include <Wire.h>
 #include <bluefruit.h>
 #include "Quaternion.h"
 #include "MagCalibration.h"
