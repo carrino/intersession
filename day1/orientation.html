@@ -1,0 +1,100 @@
+<!doctype html>
+<!--
+  Shows the CLUE's orientation as a 3D board, live over Web Bluetooth.
+  Open in Chrome or Edge (Web Bluetooth is not in Safari or Firefox).
+  Opening the file directly works, or serve it with: python3 -m http.server
+-->
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>CLUE Orientation</title>
+  <style>
+    body { margin: 0; background: #111; color: #eee; font-family: sans-serif; }
+    #ui { position: absolute; top: 1em; left: 1em; }
+  </style>
+</head>
+<body>
+  <div id="ui">
+    <button id="connect">Connect to CLUE</button>
+    <span id="status">Not connected</span>
+  </div>
+
+  <script type="importmap">
+    { "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js" } }
+  </script>
+  <script type="module">
+    import * as THREE from 'three';
+
+    // Must match the UUIDs in begin_ble.ino.
+    const SERVICE_UUID = 'c10e0001-5a7e-4a6b-9f3e-0b6f2d9a1c01';
+    const QUATERNION_UUID = 'c10e0002-5a7e-4a6b-9f3e-0b6f2d9a1c01';
+
+    // ---- 3D scene ----
+    const scene = new THREE.Scene();
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    document.body.appendChild(renderer.domElement);
+
+    // three.js is y-up by default; the CLUE's frame is z-up, so tell the camera that.
+    const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 100);
+    camera.up.set(0, 0, 1);
+    camera.position.set(0, -4, 2);
+    camera.lookAt(0, 0, 0);
+
+    scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+    const light = new THREE.DirectionalLight(0xffffff, 1.5);
+    light.position.set(2, -3, 5);
+    scene.add(light);
+
+    const board = buildBoard();
+    scene.add(board);
+
+    // A board shaped like the CLUE: x right, y toward the USB plug, z out of the screen.
+    function buildBoard() {
+      const box = (w, h, d, color) => new THREE.Mesh(new THREE.BoxGeometry(w, h, d), new THREE.MeshStandardMaterial({ color }));
+      const pcb = box(1.8, 1.8, 0.1, 0x1b5e8c);
+      const screen = box(1.0, 1.0, 0.05, 0x111111);
+      screen.position.set(0, 0.1, 0.07);
+      const usb = box(0.4, 0.3, 0.15, 0xbbbbbb);
+      usb.position.set(0, 0.9, 0);
+      return new THREE.Group().add(pcb, screen, usb);
+    }
+
+    function resize() {
+      renderer.setSize(innerWidth, innerHeight);
+      camera.aspect = innerWidth / innerHeight;
+      camera.updateProjectionMatrix();
+    }
+    addEventListener('resize', resize);
+    resize();
+    renderer.setAnimationLoop(() => renderer.render(scene, camera));
+
+    // ---- Bluetooth ----
+    const status = document.getElementById('status');
+
+    async function connect() {
+      const device = await navigator.bluetooth.requestDevice({ filters: [{ services: [SERVICE_UUID] }] });
+      device.addEventListener('gattserverdisconnected', () => status.textContent = 'Disconnected');
+
+      const server = await device.gatt.connect();
+      const service = await server.getPrimaryService(SERVICE_UUID);
+      const quaternion = await service.getCharacteristic(QUATERNION_UUID);
+      quaternion.addEventListener('characteristicvaluechanged', onQuaternion);
+      await quaternion.startNotifications();
+      status.textContent = `Connected to ${device.name}`;
+    }
+
+    // The CLUE sends four little-endian floats: w, x, y, z.
+    function onQuaternion(event) {
+      const data = event.target.value;
+      const [w, x, y, z] = [0, 4, 8, 12].map(offset => data.getFloat32(offset, true));
+      board.quaternion.set(x, y, z, w);
+    }
+
+    if (navigator.bluetooth) {
+      document.getElementById('connect').onclick = () => connect().catch(err => status.textContent = err.message);
+    } else {
+      status.textContent = 'Web Bluetooth needs Chrome or Edge';
+    }
+  </script>
+</body>
+</html>
