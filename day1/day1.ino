@@ -90,8 +90,11 @@ Adafruit_APDS9960 apds9960;
 Adafruit_BMP280 bmp280;
 MagCalibration magCalibration;
 
-// Rotation from the board's frame (x right, y toward USB, z out of the screen)
-// to the world frame, where z is up.
+// Rotation from the board's frame to the world frame. The board's frame is the motion
+// chip's own: y toward the USB plug, z down through the screen, x to the left. The world
+// frame is NED: x north, y east, z down. The identity rotation is the board lying flat,
+// screen up, with the USB plug pointing north. Lying flat the accelerometer reads -g on
+// z, since it measures the push holding the board up, not gravity itself.
 Quaternion orientation;
 
 // The gyro reads a small constant rate even when still. Measured at startup and subtracted.
@@ -178,8 +181,6 @@ void readImu() {
   for (int i = 0; i < 3; i++) {
     gyro[i] -= gyroBias[i];
   }
-  toBoardFrame(accel);
-  toBoardFrame(gyro);
 
   updateOrientation(accel, gyro, dt);
   readings.quaternion[0] = orientation.a;
@@ -198,15 +199,6 @@ void lowPass(float filtered[3], const float latest[3]) {
   }
 }
 
-// The motion chips sit on the back of the board, so their axes are not the board's.
-// Flipping y and z turns a chip reading into the board frame: x right, y toward the
-// USB plug, z out of the screen. If tilting the board moves the arrows the wrong way,
-// this is the function to fix.
-void toBoardFrame(float v[3]) {
-  v[1] = -v[1];
-  v[2] = -v[2];
-}
-
 // The gyro says how we turned since last time; the accelerometer says which way
 // is down. Apply the gyro fully, then nudge the result toward the accelerometer.
 void updateOrientation(const float accel[3], const float gyro[3], float dt) {
@@ -214,28 +206,25 @@ void updateOrientation(const float accel[3], const float gyro[3], float dt) {
   orientation *= Quaternion::from_axis_angle(gyro[0] * dt, gyro[1] * dt, gyro[2] * dt);
   orientation.normalize();
 
-  // At rest the accelerometer only feels gravity, which points up in the board's frame.
-  Quaternion measuredUp(accel[0], accel[1], accel[2]);
-  measuredUp.normalize();
-  Quaternion expectedUp = orientation.conj().rotate(Quaternion(0, 0, 1));
+  // At rest the accelerometer only feels the push holding the board up, so down is the
+  // opposite of what it reads. In the world frame down is simply +z.
+  Quaternion measuredDown(-accel[0], -accel[1], -accel[2]);
+  measuredDown.normalize();
+  Quaternion expectedDown = orientation.conj().rotate(Quaternion(0, 0, 1));
 
-  // Rotate a fraction of the way from where we think up is to where the accelerometer says it is.
-  Quaternion correction = measuredUp.rotation_between_vectors(expectedUp);
+  // Rotate a fraction of the way from where we think down is to where the accelerometer says it is.
+  Quaternion correction = measuredDown.rotation_between_vectors(expectedDown);
   orientation *= correction.fractional(ACCEL_CORRECTION);
 }
 
 void readMag() {
   sensors_event_t mag;
   lis3mdl.getEvent(&mag);
-  // The fit wants accel in the chip's own frame, like the raw mag, so undo the board-frame flip.
-  float accelChipFrame[3] = {readings.vectors.accel[0], readings.vectors.accel[1], readings.vectors.accel[2]};
-  toBoardFrame(accelChipFrame);
-  magCalibration.add(mag.magnetic.v, accelChipFrame);
+  magCalibration.add(mag.magnetic.v, readings.vectors.accel);
   copyVector(readings.vectors.mag, mag.magnetic);
   for (int i = 0; i < 3; i++) {
     readings.vectors.mag[i] -= magCalibration.offset[i];
   }
-  toBoardFrame(readings.vectors.mag);
 }
 
 // Refit the hard-iron offset from the readings so far. The fit only switches on once

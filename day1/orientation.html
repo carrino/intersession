@@ -25,8 +25,8 @@
     <span id="status">Not connected</span>
     <label>Back LED <input type="color" id="pixel" value="#000000" disabled></label>
     <table id="data"></table>
-    <p>Arrows are drawn in the board's frame: <span class="accel">accel</span> should point straight up,
-      <span class="mag">mag</span> should keep pointing the same way in the room as you turn the board.
+    <p>Arrows are drawn in the board's frame: <span class="accel">down</span> (from the accelerometer) should
+      point at the floor, <span class="mag">mag</span> should keep pointing the same way in the room as you turn the board.
       Point each of the board's six faces at the floor in turn; once all 6 are covered the mag fit
       switches on and the offset is removed.</p>
   </div>
@@ -60,15 +60,17 @@
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     document.body.appendChild(renderer.domElement);
 
-    // three.js is y-up by default; the CLUE's frame is z-up, so tell the camera that.
+    // The scene uses the board's own frame, which is the motion chip's: y toward the USB
+    // plug, z down through the screen, x to the left. three.js is y-up by default, so tell
+    // the camera that up is -z, and look along +y from behind and above.
     const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 100);
-    camera.up.set(0, 0, 1);
-    camera.position.set(0, -4, 2);
+    camera.up.set(0, 0, -1);
+    camera.position.set(0, -4, -2);
     camera.lookAt(0, 0, 0);
 
     scene.add(new THREE.AmbientLight(0xffffff, 0.6));
     const light = new THREE.DirectionalLight(0xffffff, 1.5);
-    light.position.set(2, -3, 5);
+    light.position.set(2, -3, -5);
     scene.add(light);
 
     const board = buildBoard();
@@ -76,15 +78,16 @@
 
     // Sensor vectors are measured in the board's frame, so the arrows live on the board.
     const magArrow = new THREE.ArrowHelper(new THREE.Vector3(0, 1, 0), new THREE.Vector3(), 1.5, 0xff00ff);
-    const accelArrow = new THREE.ArrowHelper(new THREE.Vector3(0, 0, 1), new THREE.Vector3(), 1.5, 0x00ff00);
-    board.add(magArrow, accelArrow);
+    const downArrow = new THREE.ArrowHelper(new THREE.Vector3(0, 0, 1), new THREE.Vector3(), 1.5, 0x00ff00);
+    board.add(magArrow, downArrow);
 
-    // A board shaped like the CLUE: x right, y toward the USB plug, z out of the screen.
+    // A board shaped like the CLUE in its own frame: the USB plug at +y, the screen on the
+    // -z face (up when the board lies flat).
     function buildBoard() {
       const box = (w, h, d, color) => new THREE.Mesh(new THREE.BoxGeometry(w, h, d), new THREE.MeshStandardMaterial({ color }));
       const pcb = box(1.8, 1.8, 0.1, 0x1b5e8c);
       const screen = box(1.0, 1.0, 0.05, 0x111111);
-      screen.position.set(0, 0.1, 0.07);
+      screen.position.set(0, 0.1, -0.07);
       const usb = box(0.4, 0.3, 0.15, 0xbbbbbb);
       usb.position.set(0, 0.9, 0);
       return new THREE.Group().add(pcb, screen, usb);
@@ -154,19 +157,25 @@
         magArrow.setDirection(new THREE.Vector3(...latest.mag).normalize());
       }
       if (latest.accel) {
-        accelArrow.setDirection(new THREE.Vector3(...latest.accel).normalize());
+        // The accelerometer reads the push holding the board up, so down is the opposite.
+        downArrow.setDirection(new THREE.Vector3(...latest.accel).normalize().negate());
       }
     }
 
     // One row per field: its values, the vector length for 3-vectors, the unit, and how
     // many packets a second its characteristic is arriving at.
     function showTable() {
-      const cell = v => `<td>${v.toFixed(2)}</td>`;
       const rows = CHARACTERISTICS.flatMap(spec => spec.fields).map(([name, count, unit]) => {
         const values = latest[name] || [];
-        const length = count === 3 && values.length ? `<td>|v| ${Math.hypot(...values).toFixed(2)}</td>` : '';
+        const cells = values.map(v => v.toFixed(2));
+        if (count === 3 && values.length) {
+          cells.push(`|v| ${Math.hypot(...values).toFixed(2)}`);
+        }
+        while (cells.length < 5) {
+          cells.push('');  // pad so the unit and rate columns line up across rows
+        }
         const rate = hz[name] === undefined ? '' : `${hz[name]} Hz`;
-        return `<tr><th class="${name}">${name}</th>${values.map(cell).join('')}${length}<td>${unit}</td><td>${rate}</td></tr>`;
+        return `<tr><th class="${name}">${name}</th>${cells.map(c => `<td>${c}</td>`).join('')}<td>${unit}</td><td>${rate}</td></tr>`;
       });
       table.innerHTML = rows.join('');
     }
