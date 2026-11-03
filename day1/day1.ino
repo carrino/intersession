@@ -25,7 +25,18 @@ const int NEOPIXEL_PIN = 18;
 const int SPEAKER_PIN = 46;
 const int WHITE_LED_PIN = 43;
 const int IMU_INTERRUPT_PIN = 45;  // the IMU's INT1 line
-const int SHT30_ADDRESS = 0x44;    // the humidity sensor, on I2C
+
+// Every sensor is on the one I2C bus. The addresses are checked twice a second to catch
+// a sensor that has stopped answering, since the sensor libraries do not report that.
+struct Sensor {
+  const char *name;
+  uint8_t address;
+  bool answering;
+};
+Sensor sensors[] = {
+  {"APDS9960", 0x39, true}, {"LSM6DS", 0x6A, true}, {"LIS3MDL", 0x1C, true}, {"SHT30", 0x44, true}, {"BMP280", 0x77, true},
+};
+const int SHT30_ADDRESS = 0x44;
 
 // How often each group of readings is sent, in packets per second.
 const int QUATERNION_HZ = 30;  // the orientation, the one thing the page needs fast
@@ -223,6 +234,7 @@ void loop() {
     publish(humidityChar);
     publish(magFitChar);
     publish(statsChar);
+    checkSensorsAnswer();
     noteLinkSettings();
     stage = STAGE_SCREEN;
     showBleStatus();
@@ -302,8 +314,28 @@ void correctNorth(const float mag[3]) {
 }
 
 void updateStats() {
+  static bool imuSilent = false;
   readings.stats[0] = imuSamples * SLOW_HZ;
+  if ((imuSamples == 0) != imuSilent) {
+    imuSilent = imuSamples == 0;
+    imuSilent ? warn("No IMU samples") : note("IMU samples back");
+  }
   imuSamples = 0;
+}
+
+// An address-only I2C transfer, the thing an I2C scanner does: a live sensor acknowledges
+// it, a dead one does not. Logs each sensor's first miss and its recovery.
+void checkSensorsAnswer() {
+  for (Sensor &sensor : sensors) {
+    Wire.beginTransmission(sensor.address);
+    bool answering = Wire.endTransmission() == 0;
+    if (answering != sensor.answering) {
+      sensor.answering = answering;
+      char message[64];
+      snprintf(message, sizeof(message), "%s %s", sensor.name, answering ? "back" : "not answering");
+      answering ? note(message) : warn(message);
+    }
+  }
 }
 
 void readMag() {
