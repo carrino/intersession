@@ -9,9 +9,9 @@
 // to subtract from every reading.
 //
 // The fit is only trusted once the readings cover the sphere. The accelerometer tells
-// which way is down in the board's frame; we wait until down has pointed into all eight
-// octants, which happens when each corner of the board has been tipped toward the floor
-// with the board face up and again face down.
+// which way is down in the board's frame; we wait until down has lined up with each of
+// the six axis directions, which happens when each face of the board has been pointed
+// at the floor.
 class MagCalibration {
 public:
   // Feed every raw magnetometer reading in microtesla, with the accelerometer reading
@@ -22,7 +22,7 @@ public:
   // once the readings cover the sphere and the fit looks like Earth's field.
   bool solve();
 
-  int octantsCovered() const;  // 0 to 8
+  int directionsCovered() const;  // 0 to 6: +x, -x, +y, -y, +z, -z
 
   float offset[3] = {0, 0, 0};
   float radius = 0;
@@ -33,7 +33,7 @@ private:
   double ata[4][4] = {};
   double atb[4] = {};
   float last[3] = {0, 0, 0};
-  bool octantSeen[8] = {};
+  bool directionSeen[6] = {};
 };
 
 #endif

@@ -27,8 +27,8 @@
     <table id="data"></table>
     <p>Arrows are drawn in the board's frame: <span class="accel">accel</span> should point straight up,
       <span class="mag">mag</span> should keep pointing the same way in the room as you turn the board.
-      Tip each corner of the board toward the floor, face up and then face down; once all 8 corners
-      are covered the mag fit switches on and the offset is removed.</p>
+      Point each of the board's six faces at the floor in turn; once all 6 are covered the mag fit
+      switches on and the offset is removed.</p>
   </div>
 
   <script type="importmap">
@@ -37,23 +37,22 @@
   <script type="module">
     import * as THREE from 'three';
 
-    // The CLUE's BLE service and its characteristics, one per sensor. Must match day1.ino.
-    // Each value is little-endian floats, except buttons which is one byte.
+    // The CLUE's BLE service and characteristics. Must match day1.ino. Each characteristic
+    // holds little-endian floats, split into the fields listed (name, how many floats, unit),
+    // except buttons which is one byte.
     const SERVICE_UUID = 'c10e0001-5a7e-4a6b-9f3e-0b6f2d9a1c01';
     const PIXEL_UUID = 'c10e000d-5a7e-4a6b-9f3e-0b6f2d9a1c01';  // writable: red, green, blue bytes
-    const SENSORS = [
-      { name: 'quaternion', uuid: 'c10e0002-5a7e-4a6b-9f3e-0b6f2d9a1c01', unit: 'w x y z' },
-      { name: 'accel', uuid: 'c10e0003-5a7e-4a6b-9f3e-0b6f2d9a1c01', unit: 'm/s²' },
-      { name: 'gyro', uuid: 'c10e0004-5a7e-4a6b-9f3e-0b6f2d9a1c01', unit: 'rad/s' },
-      { name: 'mag', uuid: 'c10e0005-5a7e-4a6b-9f3e-0b6f2d9a1c01', unit: 'µT' },
-      { name: 'temperature', uuid: 'c10e0006-5a7e-4a6b-9f3e-0b6f2d9a1c01', unit: '°C' },
-      { name: 'pressure', uuid: 'c10e0007-5a7e-4a6b-9f3e-0b6f2d9a1c01', unit: 'hPa' },
-      { name: 'humidity', uuid: 'c10e0008-5a7e-4a6b-9f3e-0b6f2d9a1c01', unit: '%' },
-      { name: 'color', uuid: 'c10e0009-5a7e-4a6b-9f3e-0b6f2d9a1c01', unit: 'r g b clear' },
-      { name: 'mic', uuid: 'c10e000a-5a7e-4a6b-9f3e-0b6f2d9a1c01', unit: 'peak to peak' },
-      { name: 'buttons', uuid: 'c10e000b-5a7e-4a6b-9f3e-0b6f2d9a1c01', unit: 'A=1 B=2' },
-      { name: 'mag fit', uuid: 'c10e000c-5a7e-4a6b-9f3e-0b6f2d9a1c01', unit: 'offset x y z, radius µT, corners of 8' },
-      { name: 'proximity', uuid: 'c10e000e-5a7e-4a6b-9f3e-0b6f2d9a1c01', unit: '0 far to 255 near' },
+    const CHARACTERISTICS = [
+      { uuid: 'c10e0002-5a7e-4a6b-9f3e-0b6f2d9a1c01', fields: [['quaternion', 4, 'w x y z']] },
+      { uuid: 'c10e0003-5a7e-4a6b-9f3e-0b6f2d9a1c01', fields: [['accel', 3, 'm/s²'], ['gyro', 3, 'rad/s'], ['mag', 3, 'µT']] },
+      { uuid: 'c10e0006-5a7e-4a6b-9f3e-0b6f2d9a1c01', fields: [['temperature', 1, '°C']] },
+      { uuid: 'c10e0007-5a7e-4a6b-9f3e-0b6f2d9a1c01', fields: [['pressure', 1, 'hPa']] },
+      { uuid: 'c10e0008-5a7e-4a6b-9f3e-0b6f2d9a1c01', fields: [['humidity', 1, '%']] },
+      { uuid: 'c10e0009-5a7e-4a6b-9f3e-0b6f2d9a1c01', fields: [['color', 4, 'r g b clear']] },
+      { uuid: 'c10e000e-5a7e-4a6b-9f3e-0b6f2d9a1c01', fields: [['proximity', 1, '0 far to 255 near']] },
+      { uuid: 'c10e000a-5a7e-4a6b-9f3e-0b6f2d9a1c01', fields: [['mic', 1, 'peak to peak']] },
+      { uuid: 'c10e000b-5a7e-4a6b-9f3e-0b6f2d9a1c01', fields: [['buttons', 1, 'A=1 B=2']] },
+      { uuid: 'c10e000c-5a7e-4a6b-9f3e-0b6f2d9a1c01', fields: [['mag fit', 5, 'offset x y z, radius µT, faces of 6']] },
     ];
 
     // ---- 3D scene ----
@@ -99,11 +98,19 @@
     addEventListener('resize', resize);
     resize();
 
-    const latest = {};  // name -> array of the most recent values from that sensor
+    const latest = {};  // field name -> most recent values
+    const hz = {};      // field name -> packets received per second, for debugging the link
+    const counts = {};
     renderer.setAnimationLoop(() => {
       renderer.render(scene, camera);
       showTable();
     });
+    setInterval(() => {
+      for (const name in counts) {
+        hz[name] = counts[name];
+        counts[name] = 0;
+      }
+    }, 1000);
 
     // ---- Bluetooth ----
     const status = document.getElementById('status');
@@ -116,9 +123,9 @@
 
       const server = await device.gatt.connect();
       const service = await server.getPrimaryService(SERVICE_UUID);
-      for (const sensor of SENSORS) {
-        const characteristic = await service.getCharacteristic(sensor.uuid);
-        characteristic.addEventListener('characteristicvaluechanged', event => onValue(sensor, event.target.value));
+      for (const spec of CHARACTERISTICS) {
+        const characteristic = await service.getCharacteristic(spec.uuid);
+        characteristic.addEventListener('characteristicvaluechanged', event => onValue(spec, event.target.value));
         await characteristic.startNotifications();
       }
 
@@ -126,6 +133,42 @@
       pixelInput.oninput = () => sendPixel(pixel);
       pixelInput.disabled = false;
       status.textContent = `Connected to ${device.name}`;
+    }
+
+    // Splits a characteristic's bytes into its fields and keeps the latest values.
+    function onValue(spec, data) {
+      let offset = 0;
+      for (const [name, count] of spec.fields) {
+        latest[name] = data.byteLength === 1
+          ? [data.getUint8(0)]
+          : Array.from({ length: count }, (_, i) => data.getFloat32(offset + 4 * i, true));
+        offset += 4 * count;
+        counts[name] = (counts[name] || 0) + 1;
+      }
+
+      if (latest.quaternion) {
+        const [w, x, y, z] = latest.quaternion;
+        board.quaternion.set(x, y, z, w);
+      }
+      if (latest.mag) {
+        magArrow.setDirection(new THREE.Vector3(...latest.mag).normalize());
+      }
+      if (latest.accel) {
+        accelArrow.setDirection(new THREE.Vector3(...latest.accel).normalize());
+      }
+    }
+
+    // One row per field: its values, the vector length for 3-vectors, the unit, and how
+    // many packets a second its characteristic is arriving at.
+    function showTable() {
+      const cell = v => `<td>${v.toFixed(2)}</td>`;
+      const rows = CHARACTERISTICS.flatMap(spec => spec.fields).map(([name, count, unit]) => {
+        const values = latest[name] || [];
+        const length = count === 3 && values.length ? `<td>|v| ${Math.hypot(...values).toFixed(2)}</td>` : '';
+        const rate = hz[name] === undefined ? '' : `${hz[name]} Hz`;
+        return `<tr><th class="${name}">${name}</th>${values.map(cell).join('')}${length}<td>${unit}</td><td>${rate}</td></tr>`;
+      });
+      table.innerHTML = rows.join('');
     }
 
     // Writes the color picker's value to the board as three bytes. The picker fires faster
@@ -145,32 +188,6 @@
       } finally {
         sendingPixel = false;
       }
-    }
-
-    function onValue(sensor, data) {
-      const values = data.byteLength === 1
-        ? [data.getUint8(0)]
-        : Array.from({ length: data.byteLength / 4 }, (_, i) => data.getFloat32(4 * i, true));
-      latest[sensor.name] = values;
-
-      if (sensor.name === 'quaternion') {
-        const [w, x, y, z] = values;
-        board.quaternion.set(x, y, z, w);
-      } else if (sensor.name === 'mag') {
-        magArrow.setDirection(new THREE.Vector3(...values).normalize());
-      } else if (sensor.name === 'accel') {
-        accelArrow.setDirection(new THREE.Vector3(...values).normalize());
-      }
-    }
-
-    // One row per sensor: its values, the vector length for 3-vectors, then the unit.
-    function showTable() {
-      const cell = v => `<td>${v.toFixed(2)}</td>`;
-      table.innerHTML = SENSORS.map(({ name, unit }) => {
-        const values = latest[name] || [];
-        const length = values.length === 3 ? `<td>|v| ${Math.hypot(...values).toFixed(2)}</td>` : '';
-        return `<tr><th class="${name}">${name}</th>${values.map(cell).join('')}${length}<td>${unit}</td></tr>`;
-      }).join('');
     }
 
     if (navigator.bluetooth) {

@@ -11,16 +11,22 @@ const int MIN_POINTS = 50;
 const float MIN_RADIUS = 20;
 const float MAX_RADIUS = 100;
 
-// An octant only counts when down is clearly inside it: every component of the gravity
-// direction at least this fraction of the whole, so the board is tipped on a corner.
-const float MIN_TILT = 0.3;
+// A direction counts once the gravity direction's dot product with that axis reaches this,
+// which is within about 45 degrees of pointing that face straight down.
+const float MIN_DOT = 0.7;
 
 void MagCalibration::add(const float mag[3], const float accel[3]) {
-  // Which octant is down in? Only trust the accelerometer when it is reading close to
-  // one g, meaning the board is turning gently rather than being shaken.
+  // Which axis is down lined up with? Only trust the accelerometer when it is reading close
+  // to one g, meaning the board is turning gently rather than being shaken.
   float g = sqrt(accel[0] * accel[0] + accel[1] * accel[1] + accel[2] * accel[2]);
-  if (g > 8 && g < 12 && fabs(accel[0]) > MIN_TILT * g && fabs(accel[1]) > MIN_TILT * g && fabs(accel[2]) > MIN_TILT * g) {
-    octantSeen[(accel[0] > 0) | (accel[1] > 0) << 1 | (accel[2] > 0) << 2] = true;
+  if (g > 8 && g < 12) {
+    for (int i = 0; i < 3; i++) {
+      if (accel[i] > MIN_DOT * g) {
+        directionSeen[2 * i] = true;
+      } else if (accel[i] < -MIN_DOT * g) {
+        directionSeen[2 * i + 1] = true;
+      }
+    }
   }
 
   float dx = mag[0] - last[0], dy = mag[1] - last[1], dz = mag[2] - last[2];
@@ -46,16 +52,16 @@ void MagCalibration::add(const float mag[3], const float accel[3]) {
   }
 }
 
-int MagCalibration::octantsCovered() const {
+int MagCalibration::directionsCovered() const {
   int covered = 0;
-  for (int i = 0; i < 8; i++) {
-    covered += octantSeen[i];
+  for (int i = 0; i < 6; i++) {
+    covered += directionSeen[i];
   }
   return covered;
 }
 
 bool MagCalibration::solve() {
-  if (count < MIN_POINTS || octantsCovered() < 8) {
+  if (count < MIN_POINTS || directionsCovered() < 6) {
     return false;
   }
 

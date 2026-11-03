@@ -26,23 +26,21 @@ const int SPEAKER_PIN = 46;
 const int WHITE_LED_PIN = 43;
 const int IMU_INTERRUPT_PIN = 45;  // the IMU's INT1 is on P1.06, pin 45 in Arduino
 
-// How often each group of sensors is read and sent, in notifications per second.
-const int MOTION_HZ = 30;       // quaternion, accel, gyro, mag
-const int LIGHT_MIC_HZ = 10;    // color, proximity, mic
+// How often each group of sensors is read and sent, in packets per second.
+const int QUATERNION_HZ = 30;   // the orientation, the one thing the page needs fast
+const int DEBUG_HZ = 10;        // accel, gyro, mag, color, proximity, mic
 const int ENVIRONMENT_HZ = 2;   // temperature, pressure, humidity: slow to read and slow to change
-const int DISPLAY_HZ = 5;
+const int DISPLAY_LINES_HZ = 20;  // one line of the screen per tick, so 8 lines refresh every 0.4 s
 
 // How far toward the accelerometer's idea of "down" we move on each update.
 // Small is smooth but slow to fix gyro drift; large is quick but jittery.
 const float ACCEL_CORRECTION = 0.005;
 
-// Our own BLE service, one characteristic per sensor. Every value is little-endian
-// floats, except buttons and pixel which are bytes. orientation.html lists the same UUIDs.
+// Our own BLE service. Every value is little-endian floats, except buttons and pixel
+// which are bytes. orientation.html lists the same UUIDs.
 BLEService sensorService("c10e0001-5a7e-4a6b-9f3e-0b6f2d9a1c01");
 BLECharacteristic quaternionChar("c10e0002-5a7e-4a6b-9f3e-0b6f2d9a1c01");
-BLECharacteristic accelChar("c10e0003-5a7e-4a6b-9f3e-0b6f2d9a1c01");
-BLECharacteristic gyroChar("c10e0004-5a7e-4a6b-9f3e-0b6f2d9a1c01");
-BLECharacteristic magChar("c10e0005-5a7e-4a6b-9f3e-0b6f2d9a1c01");
+BLECharacteristic vectorsChar("c10e0003-5a7e-4a6b-9f3e-0b6f2d9a1c01");  // accel, gyro, mag
 BLECharacteristic temperatureChar("c10e0006-5a7e-4a6b-9f3e-0b6f2d9a1c01");
 BLECharacteristic pressureChar("c10e0007-5a7e-4a6b-9f3e-0b6f2d9a1c01");
 BLECharacteristic humidityChar("c10e0008-5a7e-4a6b-9f3e-0b6f2d9a1c01");
@@ -53,17 +51,19 @@ BLECharacteristic magFitChar("c10e000c-5a7e-4a6b-9f3e-0b6f2d9a1c01");
 BLECharacteristic pixelChar("c10e000d-5a7e-4a6b-9f3e-0b6f2d9a1c01");  // writable: red, green, blue bytes
 BLECharacteristic proximityChar("c10e000e-5a7e-4a6b-9f3e-0b6f2d9a1c01");
 
-// We send about 160 notifications a second across all characteristics. The SoftDevice
-// default queue holds just one, and notify() stalls for up to 100 ms when it is full.
-const int BLE_NOTIFY_QUEUE = 16;
+// The raw motion vectors, low-pass filtered for the screen and the page. They travel
+// together in one BLE packet: 9 floats.
+struct Vectors {
+  float accel[3];       // m/s^2
+  float gyro[3];        // rad/s
+  float mag[3];         // microtesla, with the hard-iron offset removed
+};
 
 // The latest reading from every sensor. The screen and BLE both read from here.
 struct Readings {
   float quaternion[4];  // w, x, y, z
-  float accel[3];       // m/s^2
-  float gyro[3];        // rad/s
-  float mag[3];         // microtesla, with the hard-iron offset removed
-  float magFit[5];      // fitted offset x, y, z, sphere radius (microtesla), octants covered of 8
+  Vectors vectors;
+  float magFit[5];      // fitted offset x, y, z, sphere radius (microtesla), directions covered of 6
   float temperature;    // C
   float pressure;       // hPa
   float humidity;       // percent
@@ -94,6 +94,9 @@ MagCalibration magCalibration;
 // to the world frame, where z is up.
 Quaternion orientation;
 
+// The gyro reads a small constant rate even when still. Measured at startup and subtracted.
+float gyroBias[3] = {0, 0, 0};
+
 // Set by the IMU's data-ready interrupt, cleared when loop() consumes the sample.
 // The CPU cycle counter gives us a precise timestamp for when the sample was taken.
 volatile bool sampleReady = false;
@@ -120,40 +123,38 @@ void setup() {
 }
 
 void loop() {
-  static uint32_t lastMotionMs = 0, lastLightMicMs = 0, lastEnvironmentMs = 0, lastShowMs = 0;
+  static uint32_t lastQuaternionMs = 0, lastDebugMs = 0, lastEnvironmentMs = 0, lastShowMs = 0;
 
   // Data-ready stays high until we read, so also go when it is already high: a sample
   // that landed before we attached the interrupt never produces a rising edge.
   if (sampleReady || digitalRead(IMU_INTERRUPT_PIN)) {
     readImu();
   }
-  if (every(1000 / MOTION_HZ, lastMotionMs)) {
-    readMag();
-    quaternionChar.notify(readings.quaternion, sizeof(readings.quaternion));
-    accelChar.notify(readings.accel, sizeof(readings.accel));
-    gyroChar.notify(readings.gyro, sizeof(readings.gyro));
-    magChar.notify(readings.mag, sizeof(readings.mag));
+  if (every(1000 / QUATERNION_HZ, lastQuaternionMs)) {
+    send(quaternionChar, readings.quaternion, sizeof(readings.quaternion));
     handleButtons();
   }
-  if (every(1000 / LIGHT_MIC_HZ, lastLightMicMs)) {
+  if (every(1000 / DEBUG_HZ, lastDebugMs)) {
+    readMag();
     readLightAndMic();
-    colorChar.notify(readings.color, sizeof(readings.color));
-    proximityChar.notify32(readings.proximity);
-    micChar.notify32(readings.mic);
+    send(vectorsChar, &readings.vectors, sizeof(readings.vectors));
+    send(colorChar, readings.color, sizeof(readings.color));
+    send(proximityChar, &readings.proximity, sizeof(readings.proximity));
+    send(micChar, &readings.mic, sizeof(readings.mic));
   }
   if (every(1000 / ENVIRONMENT_HZ, lastEnvironmentMs)) {
     readEnvironment();
     fitMag();
-    magFitChar.notify(readings.magFit, sizeof(readings.magFit));
-    temperatureChar.notify32(readings.temperature);
-    pressureChar.notify32(readings.pressure);
-    humidityChar.notify32(readings.humidity);
+    send(magFitChar, readings.magFit, sizeof(readings.magFit));
+    send(temperatureChar, &readings.temperature, sizeof(readings.temperature));
+    send(pressureChar, &readings.pressure, sizeof(readings.pressure));
+    send(humidityChar, &readings.humidity, sizeof(readings.humidity));
   }
-  if (every(1000 / DISPLAY_HZ, lastShowMs)) {
-    showReadings();
+  if (every(1000 / DISPLAY_LINES_HZ, lastShowMs)) {
+    showNextLine();
     updatePixel();
+    analogWrite(LED_BUILTIN, 255 - millis() % 256);  // the factory demo's red LED pulse
   }
-  analogWrite(LED_BUILTIN, 255 - millis() % 256);  // the factory demo's red LED pulse
 }
 
 // ---- Motion sensors and orientation ----
@@ -169,27 +170,52 @@ void readImu() {
   float dt = (float)(sampleCycles - lastSampleCycles) / SystemCoreClock;
   lastSampleCycles = sampleCycles;
 
-  sensors_event_t accel, gyro, temp;
-  imu->getEvent(&accel, &gyro, &temp);
-  updateOrientation(accel, gyro, dt);
+  sensors_event_t event[3];  // accel, gyro, temperature
+  imu->getEvent(&event[0], &event[1], &event[2]);
+  float accel[3], gyro[3];
+  copyVector(accel, event[0].acceleration);
+  copyVector(gyro, event[1].gyro);
+  for (int i = 0; i < 3; i++) {
+    gyro[i] -= gyroBias[i];
+  }
+  toBoardFrame(accel);
+  toBoardFrame(gyro);
 
-  copyVector(readings.accel, accel.acceleration);
-  copyVector(readings.gyro, gyro.gyro);
+  updateOrientation(accel, gyro, dt);
   readings.quaternion[0] = orientation.a;
   readings.quaternion[1] = orientation.b;
   readings.quaternion[2] = orientation.c;
   readings.quaternion[3] = orientation.d;
+
+  lowPass(readings.vectors.accel, accel);
+  lowPass(readings.vectors.gyro, gyro);
+}
+
+// Smooths a vector toward the latest reading. At 416 Hz, 0.05 averages about the last 50 ms.
+void lowPass(float filtered[3], const float latest[3]) {
+  for (int i = 0; i < 3; i++) {
+    filtered[i] += (latest[i] - filtered[i]) * 0.05;
+  }
+}
+
+// The motion chips sit on the back of the board, so their axes are not the board's.
+// Flipping y and z turns a chip reading into the board frame: x right, y toward the
+// USB plug, z out of the screen. If tilting the board moves the arrows the wrong way,
+// this is the function to fix.
+void toBoardFrame(float v[3]) {
+  v[1] = -v[1];
+  v[2] = -v[2];
 }
 
 // The gyro says how we turned since last time; the accelerometer says which way
 // is down. Apply the gyro fully, then nudge the result toward the accelerometer.
-void updateOrientation(const sensors_event_t &accel, const sensors_event_t &gyro, float dt) {
+void updateOrientation(const float accel[3], const float gyro[3], float dt) {
   // Gyro is in radians per second, so rate * dt is the rotation since last update.
-  orientation *= Quaternion::from_euler_rotation_approx(gyro.gyro.x * dt, gyro.gyro.y * dt, gyro.gyro.z * dt);
+  orientation *= Quaternion::from_axis_angle(gyro[0] * dt, gyro[1] * dt, gyro[2] * dt);
   orientation.normalize();
 
   // At rest the accelerometer only feels gravity, which points up in the board's frame.
-  Quaternion measuredUp(accel.acceleration.x, accel.acceleration.y, accel.acceleration.z);
+  Quaternion measuredUp(accel[0], accel[1], accel[2]);
   measuredUp.normalize();
   Quaternion expectedUp = orientation.conj().rotate(Quaternion(0, 0, 1));
 
@@ -201,22 +227,26 @@ void updateOrientation(const sensors_event_t &accel, const sensors_event_t &gyro
 void readMag() {
   sensors_event_t mag;
   lis3mdl.getEvent(&mag);
-  magCalibration.add(mag.magnetic.v, readings.accel);
-  copyVector(readings.mag, mag.magnetic);
+  // The fit wants accel in the chip's own frame, like the raw mag, so undo the board-frame flip.
+  float accelChipFrame[3] = {readings.vectors.accel[0], readings.vectors.accel[1], readings.vectors.accel[2]};
+  toBoardFrame(accelChipFrame);
+  magCalibration.add(mag.magnetic.v, accelChipFrame);
+  copyVector(readings.vectors.mag, mag.magnetic);
   for (int i = 0; i < 3; i++) {
-    readings.mag[i] -= magCalibration.offset[i];
+    readings.vectors.mag[i] -= magCalibration.offset[i];
   }
+  toBoardFrame(readings.vectors.mag);
 }
 
 // Refit the hard-iron offset from the readings so far. The fit only switches on once
-// every corner of the board has been tipped toward the floor, face up and face down.
+// every face of the board has been pointed at the floor.
 void fitMag() {
   magCalibration.solve();
   for (int i = 0; i < 3; i++) {
     readings.magFit[i] = magCalibration.offset[i];
   }
   readings.magFit[3] = magCalibration.radius;
-  readings.magFit[4] = magCalibration.octantsCovered();
+  readings.magFit[4] = magCalibration.directionsCovered();
 }
 
 // ---- The other sensors ----
@@ -261,7 +291,7 @@ void handleButtons() {
   uint8_t buttons = (digitalRead(BUTTON_A_PIN) == LOW ? 1 : 0) | (digitalRead(BUTTON_B_PIN) == LOW ? 2 : 0);
   if (buttons != readings.buttons) {
     readings.buttons = buttons;
-    buttonsChar.notify8(buttons);
+    send(buttonsChar, &buttons, sizeof(buttons));
   }
 
   if (buttons & 1) {
@@ -331,7 +361,7 @@ void setupSensors() {
 void setupMic() {
   PDM.onReceive(onMicData);
   if (!PDM.begin(1, 16000)) {
-    Serial.println("Failed to start PDM");
+    warn("Mic failed to start");
   }
 }
 
@@ -344,12 +374,25 @@ void setupImu() {
   imu->setAccelDataRate(LSM6DS_RATE_416_HZ);
   imu->configInt1(false, true, false);  // (temperature, gyro, accel) data-ready on INT1
   pinMode(IMU_INTERRUPT_PIN, INPUT);
+  measureGyroBias();
   attachInterrupt(IMU_INTERRUPT_PIN, onImuDataReady, RISING);
 }
 
+// Average half a second of gyro readings while the board sits still after reset.
+void measureGyroBias() {
+  const int samples = 200;
+  sensors_event_t accel, gyro, temp;
+  for (int n = 0; n < samples; n++) {
+    while (!digitalRead(IMU_INTERRUPT_PIN)) {
+    }
+    imu->getEvent(&accel, &gyro, &temp);
+    for (int i = 0; i < 3; i++) {
+      gyroBias[i] += gyro.gyro.v[i] / samples;
+    }
+  }
+}
+
 void setupBle() {
-  // (max MTU, max connection event length in 1.25 ms units, notify queue, write queue)
-  Bluefruit.configPrphConn(247, 100, BLE_NOTIFY_QUEUE, 1);
   Bluefruit.begin();
   Bluefruit.Periph.setConnectCallback(onConnect);
 
@@ -364,9 +407,7 @@ void setupBle() {
 
   sensorService.begin();  // characteristics join the most recently begun service
   beginNotifyChar(quaternionChar, sizeof(readings.quaternion));
-  beginNotifyChar(accelChar, sizeof(readings.accel));
-  beginNotifyChar(gyroChar, sizeof(readings.gyro));
-  beginNotifyChar(magChar, sizeof(readings.mag));
+  beginNotifyChar(vectorsChar, sizeof(readings.vectors));
   beginNotifyChar(temperatureChar, sizeof(readings.temperature));
   beginNotifyChar(pressureChar, sizeof(readings.pressure));
   beginNotifyChar(humidityChar, sizeof(readings.humidity));
@@ -397,27 +438,52 @@ void beginNotifyChar(BLECharacteristic &chr, int bytes) {
   chr.begin();
 }
 
-// Ask the laptop or phone for the fast BLE 5 radio settings: the 2 Mbit PHY and
-// bigger link-layer packets. Each one is a request that the other side may turn down.
+// Ask the laptop or phone for the fast BLE 5 radio settings: the 2 Mbit PHY, link-layer
+// packets big enough to carry the vectors packet whole, and an MTU to match. Each one is
+// a request that the other side may turn down. The quaternion fits the default MTU anyway.
 void onConnect(uint16_t connHandle) {
   BLEConnection *conn = Bluefruit.Connection(connHandle);
   conn->requestPHY(BLE_GAP_PHY_2MBPS);
   conn->requestDataLengthUpdate();
+  conn->requestMtuExchange(sizeof(Vectors) + 3);  // +3 for the notification header
+}
+
+// Sends a characteristic's new value to whoever subscribed to it. Bluefruit's own notify()
+// waits up to 100 ms for room in the radio queue, which would stall this whole loop whenever
+// the laptop is slow to take packets. This version just skips the packet instead; the next
+// one carries a fresher reading anyway.
+bool send(BLECharacteristic &chr, const void *data, uint16_t len) {
+  chr.write(data, len);  // keep the stored value current for anyone who reads instead
+  if (!chr.notifyEnabled()) {
+    return false;
+  }
+  ble_gatts_hvx_params_t hvx = {};
+  hvx.handle = chr.handles().value_handle;
+  hvx.type = BLE_GATT_HVX_NOTIFICATION;
+  hvx.p_len = &len;
+  hvx.p_data = (uint8_t *)data;
+  return sd_ble_gatts_hvx(Bluefruit.connHandle(), &hvx) == NRF_SUCCESS;
 }
 
 // ---- Screen, laid out like the factory demo ----
 
-void showReadings() {
+// Drawing the whole screen at once takes long enough to hold up BLE packets and IMU
+// samples, so each call draws just one of the eight lines.
+void showNextLine() {
+  static int line = 0;
   display.setTextColor(ST77XX_WHITE, ST77XX_BLACK);
-  display.setCursor(0, 100);
-  showValue("Temp: ", readings.temperature, 2, " C");
-  showValue("Baro: ", readings.pressure, 2, " hPa");
-  showValue("Humid: ", readings.humidity, 2, " %");
-  showValue("Light: ", readings.color[3], 0, "");
-  showVector("Accel:", readings.accel);
-  showVector("Gyro:", readings.gyro);
-  showVector("Mag:", readings.mag);
-  showValue("Mic: ", readings.mic, 0, "");
+  display.setCursor(0, 100 + line * 16);
+  switch (line) {
+    case 0: showValue("Temp: ", readings.temperature, 2, " C"); break;
+    case 1: showValue("Baro: ", readings.pressure, 2, " hPa"); break;
+    case 2: showValue("Humid: ", readings.humidity, 2, " %"); break;
+    case 3: showValue("Light: ", readings.color[3], 0, ""); break;
+    case 4: showVector("Accel:", readings.vectors.accel); break;
+    case 5: showVector("Gyro:", readings.vectors.gyro); break;
+    case 6: showVector("Mag:", readings.vectors.mag); break;
+    case 7: showValue("Mic: ", readings.mic, 0, ""); break;
+  }
+  line = (line + 1) % 8;
 }
 
 // Trailing spaces on each line erase leftovers from a previous longer value.
