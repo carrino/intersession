@@ -152,11 +152,32 @@
       log('requesting device');
       device = await navigator.bluetooth.requestDevice({ filters: [{ services: [SERVICE_UUID] }] });
       log('chose', device.name, device.id);
-      device.addEventListener('gattserverdisconnected', () => {
-        log('disconnected');
-        status.textContent = 'Disconnected';
-      });
+      device.addEventListener('gattserverdisconnected', reconnect);
+      await subscribe();
+    }
 
+    // A board that reset drops the link and is advertising again a few seconds later. Web
+    // Bluetooth does nothing about that on its own, so keep trying to reconnect, a little
+    // less often each time, until it answers. Discovery runs again because the old
+    // characteristic handles died with the link.
+    async function reconnect() {
+      const lost = device;
+      log('disconnected');
+      pixelInput.disabled = true;
+      for (let wait = 1000; device === lost; wait = Math.min(wait * 2, 10000)) {
+        status.textContent = `Disconnected, reconnecting in ${wait / 1000} s`;
+        await new Promise(resolve => setTimeout(resolve, wait));
+        try {
+          await subscribe();
+          return;
+        } catch (err) {
+          log('reconnect failed:', err.message);
+        }
+      }
+    }
+
+    // Everything after the device is chosen: connect, find the service, subscribe to it all.
+    async function subscribe() {
       const server = await device.gatt.connect();
       log('connected, discovering service');
       const service = await server.getPrimaryService(SERVICE_UUID);
