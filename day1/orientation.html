@@ -79,6 +79,12 @@
     const board = buildBoard();
     scene.add(board);
 
+    // A level grid just below the board, in the world frame, so "flat" is something to see.
+    const ground = new THREE.GridHelper(4, 8, 0x444444, 0x333333);
+    ground.rotation.x = Math.PI / 2;  // GridHelper lies in the XZ plane; our ground is XY
+    ground.position.z = 1.2;          // +z is down, so this is below the board
+    scene.add(ground);
+
     // The arrows show the averaged NED vectors, so they live in the room's frame, not on
     // the board: if the orientation is right they hold still while the board turns.
     const magArrow = new THREE.ArrowHelper(new THREE.Vector3(0, 1, 0), new THREE.Vector3(), 1.5, 0xff00ff);
