@@ -157,16 +157,16 @@
     }
 
     // A board that reset drops the link and is advertising again a few seconds later. Web
-    // Bluetooth does nothing about that on its own, so keep trying to reconnect, a little
-    // less often each time, until it answers. Discovery runs again because the old
-    // characteristic handles died with the link.
+    // Bluetooth does nothing about that on its own, so try to reconnect once a second for
+    // ten minutes. Discovery runs again because the old characteristic handles died with
+    // the link.
     async function reconnect() {
       const lost = device;
       log('disconnected');
       pixelInput.disabled = true;
-      for (let wait = 1000; device === lost; wait = Math.min(wait * 2, 10000)) {
-        status.textContent = `Disconnected, reconnecting in ${wait / 1000} s`;
-        await new Promise(resolve => setTimeout(resolve, wait));
+      for (let tries = 1; tries <= 600 && device === lost; tries++) {
+        status.textContent = `Disconnected, reconnecting (try ${tries})`;
+        await new Promise(resolve => setTimeout(resolve, 1000));
         try {
           await subscribe();
           return;
@@ -174,6 +174,7 @@
           log('reconnect failed:', err.message);
         }
       }
+      status.textContent = 'Disconnected';
     }
 
     // Everything after the device is chosen: connect, find the service, subscribe to it all.
