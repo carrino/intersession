@@ -74,9 +74,8 @@ struct Readings {
 };
 Readings readings;
 
-// The NeoPixel on the back of the board cycles a rainbow until something writes a color over BLE.
-uint8_t pixelColor[3];
-bool pixelSetOverBle = false;
+// The NeoPixel on the back of the board stays off until something writes a color over BLE.
+uint8_t pixelColor[3] = {0, 0, 0};
 
 Adafruit_ST7789 display(&SPI1, TFT_CS_PIN, TFT_DC_PIN, TFT_RESET_PIN);
 Adafruit_NeoPixel pixel(1, NEOPIXEL_PIN, NEO_GRB + NEO_KHZ800);
@@ -274,11 +273,7 @@ void handleButtons() {
 }
 
 void updatePixel() {
-  static uint16_t hue = 0;
-  hue += 1280;
-  uint32_t color = pixelSetOverBle ? pixel.Color(pixelColor[0], pixelColor[1], pixelColor[2])
-                                   : pixel.ColorHSV(hue);
-  pixel.fill(color);
+  pixel.fill(pixel.Color(pixelColor[0], pixelColor[1], pixelColor[2]));
   pixel.show();
 }
 
@@ -286,7 +281,6 @@ void setPixel(uint8_t red, uint8_t green, uint8_t blue) {
   pixelColor[0] = red;
   pixelColor[1] = green;
   pixelColor[2] = blue;
-  pixelSetOverBle = true;
   pixelChar.write(pixelColor, sizeof(pixelColor));  // so reading the characteristic shows the current color
 }
 
