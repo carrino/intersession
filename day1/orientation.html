@@ -385,18 +385,14 @@
         cards[i].style.background = pointing ? `linear-gradient(90deg, #060 ${green}%, #660 ${green}%)` : '';
       });
       if (locked.every(Boolean)) {
-        sendCalibration().catch(err => console.error(err));
+        const offsets = [
+          ...sphereCenter(locked.map(l => l.accel)),
+          ...mean(locked, 'gyro'),
+          ...sphereCenter(locked.map(l => l.mag)),
+        ];
+        showCalibrationScreen(false);  // before the write finishes, so the next packet does not send again
+        writeCalibration(offsets).catch(err => console.error(err));
       }
-    }
-
-    async function sendCalibration() {
-      const offsets = [
-        ...sphereCenter(locked.map(l => l.accel)),
-        ...mean(locked, 'gyro'),
-        ...sphereCenter(locked.map(l => l.mag)),
-      ];
-      await writeCalibration(offsets);
-      showCalibrationScreen(false);
     }
 
     recalibrateButton.onclick = async () => {
