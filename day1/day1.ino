@@ -37,9 +37,14 @@ const int SCREEN_LINES_HZ = 20;  // one line of the screen per tick: 9 lines ref
 // Small is smooth but slow to fix gyro drift; large is quick but jittery.
 const float ACCEL_CORRECTION = 0.005;
 
+// The PDM driver's gain register is 0.5 dB per step with 40 as 0 dB. The default of 20
+// (-10 dB) leaves a quiet room below the converter's smallest step, so everything quiet
+// reads as the same hiss; +10 dB lifts it clear while a loud clap still fits.
+const int MIC_GAIN = 60;
+
 // Turns the mic level relative to full scale into an approximate sound pressure level:
-// the mic puts out -26 dBFS at 94 dB SPL and the PDM driver's default gain is -10 dB.
-const float MIC_DB_OFFSET = 130;
+// the mic puts out -26 dBFS at 94 dB SPL, and the +10 dB of gain comes off again.
+const float MIC_DB_OFFSET = 94 + 26 - 10;
 
 // Our BLE service, one characteristic per reading. Values are little-endian floats,
 // except buttons and pixel which are bytes. orientation.html lists the same UUIDs.
@@ -341,7 +346,7 @@ void handleButtons() {
   } else {
     tone(SPEAKER_PIN, 0);
   }
-  digitalWrite(WHITE_LED_PIN, buttons & 2);
+  digitalWrite(WHITE_LED_PIN, (buttons & 2) ? HIGH : LOW);
 }
 
 // Runs when a phone or web page writes three bytes, red green blue, to the pixel
@@ -365,9 +370,9 @@ void setupDisplay() {
 
 // The sensors are all on the board, so only a problem gets mentioned on the screen.
 void setupSensors() {
-  // Color: 50 ms of light gathering at 16x gain, so an object lit by the front LEDs gives
-  // counts in the hundreds rather than single digits.
-  if (apds9960.begin(50, APDS9960_AGAIN_16X)) {
+  // Color: 50 ms of light gathering per reading, five times the default, so an object lit
+  // by the front LEDs gives counts in the hundreds rather than single digits.
+  if (apds9960.begin(50)) {
     apds9960.enableColor(true);
     apds9960.enableProximity(true);
   } else {
@@ -398,6 +403,7 @@ void setupMic() {
   if (!PDM.begin(1, 16000)) {
     warn("Mic failed to start");
   }
+  PDM.setGain(MIC_GAIN);
 }
 
 // Sample at 416 Hz and raise INT1 whenever a new gyro reading is ready.
