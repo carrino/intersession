@@ -328,7 +328,8 @@ void onMicData() {
   micCount += count;
 }
 
-// Same as the factory demo: A beeps, B lights the white LEDs.
+// Same as the factory demo: A beeps, B lights the white LEDs on the front. The color
+// sensor reads reflected light, so hold B to light whatever is in front of it.
 void handleButtons() {
   uint8_t buttons = (digitalRead(BUTTON_A_PIN) == LOW ? 1 : 0) | (digitalRead(BUTTON_B_PIN) == LOW ? 2 : 0);
   if (buttons != readings.buttons) {
@@ -364,7 +365,9 @@ void setupDisplay() {
 
 // The sensors are all on the board, so only a problem gets mentioned on the screen.
 void setupSensors() {
-  if (apds9960.begin()) {
+  // Color: 50 ms of light gathering at 16x gain, so an object lit by the front LEDs gives
+  // counts in the hundreds rather than single digits.
+  if (apds9960.begin(50, APDS9960_AGAIN_16X)) {
     apds9960.enableColor(true);
     apds9960.enableProximity(true);
   } else {

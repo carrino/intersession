@@ -29,7 +29,8 @@
       so they should hold still while the board moves: <span class="accel">down</span> straight at the floor,
       <span class="mag">mag</span> toward magnetic north and down. If they swing with the board, the orientation is off.
       Point each of the board's six faces at the floor in turn; once all 6 are covered the mag fit
-      switches on and the offset is removed.</p>
+      switches on and the offset is removed. The color sensor only sees what is lit: hold button B to turn on the
+      front LEDs while holding something in front of it.</p>
   </div>
 
   <script type="importmap">
@@ -219,6 +220,9 @@
         if (name === 'mag fit' && values.length) {
           cells[4] = facesSeen(values[4]);
         }
+        if (name === 'color' && values.length) {
+          cells[4] = colorSwatch(values);
+        }
         while (cells.length < 5) {
           cells.push('');  // pad so the unit and rate columns line up across rows
         }
@@ -226,6 +230,13 @@
         return `<tr><th class="${name}">${name}</th>${cells.map(c => `<td>${c}</td>`).join('')}<td>${unit}</td><td>${rate}</td></tr>`;
       });
       table.innerHTML = rows.join('');
+    }
+
+    // The color counts scaled so the strongest channel is full brightness: the hue, not the amount of light.
+    function colorSwatch([r, g, b]) {
+      const scale = 255 / Math.max(r, g, b, 1);
+      return `<span style="display:inline-block; width:1.2em; height:1.2em; vertical-align:middle;
+        background:rgb(${r * scale}, ${g * scale}, ${b * scale})"></span>`;
     }
 
     // The mag fit's last value is a bit per face the board has pointed at the floor.
