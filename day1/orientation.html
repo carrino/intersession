@@ -25,7 +25,8 @@
     <span id="status">Not connected</span>
     <table id="data"></table>
     <p>Arrows are drawn in the board's frame: <span class="accel">accel</span> should point straight up,
-      <span class="mag">mag</span> should keep pointing the same way in the room as you turn the board.</p>
+      <span class="mag">mag</span> should keep pointing the same way in the room as you turn the board.
+      Turn the board through every orientation and the mag fit settles on the hard-iron offset.</p>
   </div>
 
   <script type="importmap">
@@ -48,6 +49,7 @@
       { name: 'color', uuid: 'c10e0009-5a7e-4a6b-9f3e-0b6f2d9a1c01', unit: 'r g b clear' },
       { name: 'mic', uuid: 'c10e000a-5a7e-4a6b-9f3e-0b6f2d9a1c01', unit: 'peak to peak' },
       { name: 'buttons', uuid: 'c10e000b-5a7e-4a6b-9f3e-0b6f2d9a1c01', unit: 'A=1 B=2' },
+      { name: 'mag fit', uuid: 'c10e000c-5a7e-4a6b-9f3e-0b6f2d9a1c01', unit: 'offset x y z, radius µT' },
     ];
 
     // ---- 3D scene ----

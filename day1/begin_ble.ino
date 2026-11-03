@@ -16,6 +16,7 @@
 #include <PDM.h>
 #include <Quaternion.h>
 #include <bluefruit.h>
+#include "MagCalibration.h"
 
 const int WHITE_LED_PIN = 43;
 const int IMU_INTERRUPT_PIN = 45;  // the CLUE wires the IMU's INT1 to P1.06, pin 45 in Arduino
@@ -43,6 +44,7 @@ BLECharacteristic humidityChar("c10e0008-5a7e-4a6b-9f3e-0b6f2d9a1c01");
 BLECharacteristic colorChar("c10e0009-5a7e-4a6b-9f3e-0b6f2d9a1c01");
 BLECharacteristic micChar("c10e000a-5a7e-4a6b-9f3e-0b6f2d9a1c01");
 BLECharacteristic buttonsChar("c10e000b-5a7e-4a6b-9f3e-0b6f2d9a1c01");
+BLECharacteristic magFitChar("c10e000c-5a7e-4a6b-9f3e-0b6f2d9a1c01");
 
 // We send about 150 notifications a second across all characteristics. The SoftDevice
 // default queue holds just one, and notify() stalls for up to 100 ms when it is full.
@@ -53,7 +55,8 @@ struct Readings {
   float quaternion[4];  // w, x, y, z
   float accel[3];       // m/s^2
   float gyro[3];        // rad/s
-  float mag[3];         // microtesla
+  float mag[3];         // microtesla, with the hard-iron offset removed
+  float magFit[4];      // the fitted offset x, y, z and sphere radius, microtesla
   float temperature;    // C
   float pressure;       // hPa
   float humidity;       // percent
@@ -74,6 +77,7 @@ Adafruit_LIS3MDL lis3mdl;
 Adafruit_SHT31 sht30;
 Adafruit_APDS9960 apds9960;
 Adafruit_BMP280 bmp280;
+MagCalibration magCalibration;
 
 // Rotation from the board's frame (x right, y toward USB, z out of the screen)
 // to the world frame, where z is up.
@@ -127,6 +131,8 @@ void loop() {
   }
   if (every(1000 / ENVIRONMENT_HZ, lastEnvironmentMs)) {
     readEnvironment();
+    fitMag();
+    magFitChar.notify(readings.magFit, sizeof(readings.magFit));
     temperatureChar.notify32(readings.temperature);
     pressureChar.notify32(readings.pressure);
     humidityChar.notify32(readings.humidity);
@@ -182,7 +188,21 @@ void updateOrientation(const sensors_event_t &accel, const sensors_event_t &gyro
 void readMag() {
   sensors_event_t mag;
   lis3mdl.getEvent(&mag);
+  magCalibration.add(mag.magnetic.x, mag.magnetic.y, mag.magnetic.z);
   copyVector(readings.mag, mag.magnetic);
+  for (int i = 0; i < 3; i++) {
+    readings.mag[i] -= magCalibration.offset[i];
+  }
+}
+
+// Refit the hard-iron offset from the readings so far. Turning the board through all
+// orientations gives it the whole sphere to work with.
+void fitMag() {
+  magCalibration.solve();
+  for (int i = 0; i < 3; i++) {
+    readings.magFit[i] = magCalibration.offset[i];
+  }
+  readings.magFit[3] = magCalibration.radius;
 }
 
 // ---- The other sensors ----
@@ -359,6 +379,7 @@ void setupBle() {
   beginNotifyChar(colorChar, sizeof(readings.color));
   beginNotifyChar(micChar, sizeof(readings.mic));
   beginNotifyChar(buttonsChar, sizeof(readings.buttons));
+  beginNotifyChar(magFitChar, sizeof(readings.magFit));
 
   Bluefruit.Advertising.addFlags(BLE_GAP_ADV_FLAGS_LE_ONLY_GENERAL_DISC_MODE);
   Bluefruit.Advertising.addService(sensorService);
