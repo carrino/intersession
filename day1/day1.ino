@@ -33,9 +33,11 @@ const int DEBUG_HZ = 10;       // accel, gyro, mag, color, proximity, mic
 const int SLOW_HZ = 2;         // temperature, pressure, humidity, mag fit, stats
 const int SCREEN_LINES_HZ = 20;  // one line of the screen per tick: 9 lines refresh every 0.45 s
 
-// How far toward the accelerometer's idea of "down" we move on each IMU sample.
-// Small is smooth but slow to fix gyro drift; large is quick but jittery.
-const float ACCEL_CORRECTION = 0.005;
+// How far toward the accelerometer's idea of "down" we move on each IMU sample, and how
+// far toward the magnetometer's idea of "north" on each mag reading. Small is smooth but
+// slow to fix gyro drift; large is quick but jittery.
+const float ACCEL_CORRECTION = 0.005;  // 416 times a second
+const float MAG_CORRECTION = 0.05;     // 10 times a second
 
 // The PDM driver's gain register is 0.5 dB per step with 40 as 0 dB. The default of 20
 // (-10 dB) leaves a quiet room below the converter's smallest step, so everything quiet
@@ -109,9 +111,9 @@ MagCalibration magCalibration;
 
 // The rotation that takes a vector in the device's frame to the world frame:
 //   world = orientation.rotate(device)
-// The device's frame is the motion chip's: y toward the USB plug, z down through the
-// screen, x toward button A. The world frame is NED: x north, y east, z down. Identity
-// is the board flat, screen up, USB pointing north.
+// The device's frame is the motion chip's: x toward button A, y toward the USB plug,
+// z down through the screen. The world frame is NED: x north, y east, z down. Identity
+// is the board flat, screen up, with button A's edge toward north.
 Quaternion orientation;
 
 // Set by the IMU's data-ready interrupt, cleared when loop() takes the sample.
@@ -230,6 +232,21 @@ void updateOrientation(const float accel[3], const float gyro[3], float dt) {
   readings.stats[1] = acos(constrain(down.d, -1, 1)) * 180 / PI;
 }
 
+// The accelerometer cannot tell which way is north; the magnetometer can, once its offset
+// is known. Rotate the reading into the world, keep only its horizontal part (Earth's
+// field also points steeply into the ground), and nudge the orientation about the
+// vertical axis a fraction of the way from where that points to north, (1, 0, 0).
+void correctNorth(const float mag[3]) {
+  Quaternion field = orientation.rotate(Quaternion(mag[0], mag[1], mag[2]));
+  field.d = 0;
+  if (field.norm() < 5) {
+    return;  // almost vertical: no usable sense of north in this reading
+  }
+  field.normalize();
+  Quaternion correction = field.rotation_between_vectors(Quaternion(1, 0, 0));
+  orientation = correction.fractional(MAG_CORRECTION) * orientation;
+}
+
 void updateStats() {
   readings.stats[0] = imuSamples * SLOW_HZ;
   imuSamples = 0;
@@ -241,6 +258,9 @@ void readMag() {
   magCalibration.add(magEvent.magnetic.v, readings.vectors.accel);
   for (int i = 0; i < 3; i++) {
     readings.vectors.mag[i] = magEvent.magnetic.v[i] - magCalibration.offset[i];
+  }
+  if (magCalibration.isEarthField(magEvent.magnetic.v)) {
+    correctNorth(readings.vectors.mag);
   }
   float magNed[3];
   toWorldFrame(magNed, readings.vectors.mag);

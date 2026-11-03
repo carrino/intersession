@@ -22,6 +22,10 @@ public:
   // once the readings cover the sphere and the fit looks like Earth's field.
   bool solve();
 
+  // True once there is a fit and this raw reading sits on its sphere, meaning it is
+  // Earth's field and not a magnet or a desk full of wires.
+  bool isEarthField(const float mag[3]) const;
+
   int facesCovered() const;  // 0 to 6
   int facesSeen() const;     // as bits: +x, -x, +y, -y, +z, -z
 

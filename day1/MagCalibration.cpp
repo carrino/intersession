@@ -32,8 +32,8 @@ void MagCalibration::add(const float mag[3], const float accel[3]) {
     }
   }
 
-  if (radius > 0 && fabs(distance(mag, offset) - radius) > MAX_OFF_SPHERE * radius) {
-    return;  // a desk full of wires or a magnet nearby, not Earth's field
+  if (radius > 0 && !isEarthField(mag)) {
+    return;  // a desk full of wires or a magnet nearby would drag the fit off
   }
   if (count > 0 && distance(mag, last) < MIN_SPACING) {
     return;  // the board has not moved; this point is already in the fit
@@ -55,6 +55,10 @@ void MagCalibration::add(const float mag[3], const float accel[3]) {
     }
     atb[i] += row[i] * b;
   }
+}
+
+bool MagCalibration::isEarthField(const float mag[3]) const {
+  return radius > 0 && fabs(distance(mag, offset) - radius) <= MAX_OFF_SPHERE * radius;
 }
 
 float MagCalibration::distance(const float a[3], const float b[3]) {

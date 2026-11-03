@@ -5,5 +5,3 @@
   per-axis offsets to the board's internal flash, load them at every boot. Replaces the
   startup gyro averaging and the per-boot mag fit.
 - **STEMMA QT plug-in sensors.** Probe for optional I2C sensors at startup and publish them.
-- **Magnetometer in the fusion** for yaw, once its offset is trustworthy. Gyro-only yaw
-  drifts slowly.
