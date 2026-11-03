@@ -63,7 +63,7 @@ BLECharacteristic magFitChar("c10e000c-5a7e-4a6b-9f3e-0b6f2d9a1c01");
 BLECharacteristic pixelChar("c10e000d-5a7e-4a6b-9f3e-0b6f2d9a1c01");  // writable: red, green, blue
 BLECharacteristic proximityChar("c10e000e-5a7e-4a6b-9f3e-0b6f2d9a1c01");
 BLECharacteristic statsChar("c10e000f-5a7e-4a6b-9f3e-0b6f2d9a1c01");
-BLECharacteristic logChar("c10e0010-5a7e-4a6b-9f3e-0b6f2d9a1c01");  // text: every warn() the board prints
+BLECharacteristic logChar("c10e0010-5a7e-4a6b-9f3e-0b6f2d9a1c01");  // text: every note() and warn()
 
 // The motion readings, sent together in one packet. The NED pair are the raw readings
 // rotated into the world frame by the orientation and averaged there, where gravity and
@@ -182,7 +182,7 @@ void setup() {
   startWatchdog();
   stallTimer.begin(500, onStallCheck);
   stallTimer.start();
-  publish(logChar);  // any warning from setup, for a page that connects later
+  note("Started");
 }
 
 void loop() {
@@ -223,6 +223,7 @@ void loop() {
     publish(humidityChar);
     publish(magFitChar);
     publish(statsChar);
+    noteLinkSettings();
     stage = STAGE_SCREEN;
     showBleStatus();
   }
@@ -323,7 +324,14 @@ void readMag() {
 // Refit the magnetometer's hard-iron offset. The fit only switches on once every face of
 // the board has been pointed at the floor; until then the offset stays at zero.
 void fitMag() {
-  magCalibration.solve();
+  static bool locked = false;
+  if (magCalibration.solve() && !locked) {
+    locked = true;
+    char message[64];
+    snprintf(message, sizeof(message), "Mag fit locked: offset %.0f %.0f %.0f, field %.0f uT", magCalibration.offset[0],
+             magCalibration.offset[1], magCalibration.offset[2], magCalibration.radius);
+    note(message);
+  }
   copyVector(readings.magFit, magCalibration.offset);
   readings.magFit[3] = magCalibration.radius;
   readings.magFit[4] = magCalibration.facesSeen();
@@ -583,6 +591,28 @@ void setupBle() {
   bleStarted = true;
 }
 
+// Reports the radio settings the laptop or phone agreed to, once they have settled and
+// whenever they change: the MTU decides whether the bigger packets arrive whole, and the
+// interval is the ceiling on how many packets a second get through.
+void noteLinkSettings() {
+  static uint16_t lastMtu = 0, lastInterval = 0;
+  static uint8_t lastPhy = 0;
+  BLEConnection *conn = Bluefruit.Connection(Bluefruit.connHandle());
+  if (!Bluefruit.connected() || conn == NULL) {
+    lastMtu = 0;
+    return;
+  }
+  if (conn->getMtu() != lastMtu || conn->getConnectionInterval() != lastInterval || conn->getPHY() != lastPhy) {
+    lastMtu = conn->getMtu();
+    lastInterval = conn->getConnectionInterval();
+    lastPhy = conn->getPHY();
+    char message[64];
+    snprintf(message, sizeof(message), "Link: MTU %u, interval %.2f ms, %u Mbit PHY", lastMtu, lastInterval * 1.25,
+             lastPhy == BLE_GAP_PHY_2MBPS ? 2 : 1);
+    note(message);
+  }
+}
+
 // A characteristic anyone can read or subscribe to, holding a fixed number of bytes.
 void beginNotifyChar(BLECharacteristic &chr, int bytes) {
   chr.setProperties(CHR_PROPS_READ | CHR_PROPS_NOTIFY);
@@ -716,18 +746,24 @@ void copyVector(float dest[3], const float v[3]) {
   dest[2] = v[2];
 }
 
-// Reports a problem everywhere it can be seen, and keeps going: the serial port, the screen
-// in red, and the log characteristic, which the web page prints as DEVICE_ERROR. A warning
-// from before BLE is up is published once BLE starts, so a page that connects later still
-// gets the last one.
-void warn(const char *message) {
+// Sends a line to the serial port and to the log characteristic, which the web page prints
+// in its console: the way to see what the board is thinking once it is off the cable. A
+// line from before BLE is up goes out once it starts, so a page connecting later gets it.
+void note(const char *message) {
   Serial.println(message);
-  display.setTextColor(ST77XX_RED);
-  display.println(message);
   strncpy(logLine, message, sizeof(logLine) - 1);
   if (bleStarted) {
     publish(logChar);
   }
+}
+
+// Like note(), for a problem: also on the screen in red, and flagged as an error on the page.
+void warn(const char *message) {
+  display.setTextColor(ST77XX_RED);
+  display.println(message);
+  char line[64];
+  snprintf(line, sizeof(line), "ERROR: %s", message);
+  note(line);
 }
 
 void halt(const char *message) {
