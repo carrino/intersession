@@ -635,23 +635,24 @@ void setupBle() {
 }
 
 // Reports the radio settings the laptop or phone agreed to, once they have settled and
-// whenever they change: the MTU decides whether the bigger packets arrive whole, and the
-// interval is the ceiling on how many packets a second get through.
+// whenever they change: the MTU decides whether the bigger packets arrive whole, the
+// interval is the ceiling on how many packets a second get through, and the timeout is
+// how long the other side waits in silence before it declares the link dead.
 void noteLinkSettings() {
-  static uint16_t lastMtu = 0, lastInterval = 0;
-  static uint8_t lastPhy = 0;
+  static uint16_t lastMtu = 0, lastInterval = 0, lastTimeout = 0;
   BLEConnection *conn = Bluefruit.Connection(Bluefruit.connHandle());
   if (!Bluefruit.connected() || conn == NULL) {
     lastMtu = 0;
     return;
   }
-  if (conn->getMtu() != lastMtu || conn->getConnectionInterval() != lastInterval || conn->getPHY() != lastPhy) {
+  if (conn->getMtu() != lastMtu || conn->getConnectionInterval() != lastInterval ||
+      conn->getSupervisionTimeout() != lastTimeout) {
     lastMtu = conn->getMtu();
     lastInterval = conn->getConnectionInterval();
-    lastPhy = conn->getPHY();
+    lastTimeout = conn->getSupervisionTimeout();
     char message[64];
-    snprintf(message, sizeof(message), "Link: MTU %u, interval %.2f ms, %u Mbit PHY", lastMtu, lastInterval * 1.25,
-             lastPhy == BLE_GAP_PHY_2MBPS ? 2 : 1);
+    snprintf(message, sizeof(message), "Link: MTU %u, interval %.2f ms, timeout %u ms, %u Mbit PHY", lastMtu,
+             lastInterval * 1.25, lastTimeout * 10, conn->getPHY() == BLE_GAP_PHY_2MBPS ? 2 : 1);
     note(message);
   }
 }
