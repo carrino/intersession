@@ -41,6 +41,12 @@ You should now see **Adafruit CLUE** under Tools > Board > Adafruit nRF52 Boards
   and a `CLUEBOOT` drive appears. Upload again.
 - **Upload succeeds but the sketch never starts:** Tools > SoftDevice must match the board.
   Open `INFO_UF2.TXT` on the `CLUEBOOT` drive to see which version the board has.
+- **Black screen with the front white LEDs stuck on after an upload, and resets or
+  re-uploads do not help:** a sensor is holding the I2C bus. An upload resets the chip at a
+  random moment, and if that lands in the middle of a sensor read, the sensor keeps holding
+  the data line until something clocks it out. Resets do not clear it because the sensors
+  keep their power. **Unplug the USB cable for ten seconds** and plug it back in. The
+  current sketch also clears the bus by hand at startup, so this only bites old builds.
 - **"Adafruit CLUE" is not in the board list:** step 3 of the setup did not finish.
 - **A `.h` file is not found:** step 4 did not finish, or the sketch was opened from a copy
   of the `.ino` file on its own instead of from its folder.
