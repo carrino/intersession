@@ -32,7 +32,7 @@ const int DISPLAY_HZ = 5;
 const float ACCEL_CORRECTION = 0.005;
 
 // Our own BLE service, one characteristic per sensor. Every value is little-endian
-// floats, except buttons which is one byte. orientation.html lists the same UUIDs.
+// floats, except buttons and pixel which are bytes. orientation.html lists the same UUIDs.
 BLEService sensorService("c10e0001-5a7e-4a6b-9f3e-0b6f2d9a1c01");
 BLECharacteristic quaternionChar("c10e0002-5a7e-4a6b-9f3e-0b6f2d9a1c01");
 BLECharacteristic accelChar("c10e0003-5a7e-4a6b-9f3e-0b6f2d9a1c01");
@@ -45,6 +45,7 @@ BLECharacteristic colorChar("c10e0009-5a7e-4a6b-9f3e-0b6f2d9a1c01");
 BLECharacteristic micChar("c10e000a-5a7e-4a6b-9f3e-0b6f2d9a1c01");
 BLECharacteristic buttonsChar("c10e000b-5a7e-4a6b-9f3e-0b6f2d9a1c01");
 BLECharacteristic magFitChar("c10e000c-5a7e-4a6b-9f3e-0b6f2d9a1c01");
+BLECharacteristic pixelChar("c10e000d-5a7e-4a6b-9f3e-0b6f2d9a1c01");  // writable: red, green, blue bytes
 
 // We send about 150 notifications a second across all characteristics. The SoftDevice
 // default queue holds just one, and notify() stalls for up to 100 ms when it is full.
@@ -65,6 +66,10 @@ struct Readings {
   uint8_t buttons;      // bit 0 = A, bit 1 = B
 };
 Readings readings;
+
+// The NeoPixel on the back of the board cycles a rainbow until something writes a color over BLE.
+uint8_t pixelColor[3];
+bool pixelSetOverBle = false;
 
 Adafruit_Arcada arcada;
 extern Adafruit_SPIFlash Arcada_QSPI_Flash;
@@ -139,7 +144,7 @@ void loop() {
   }
   if (every(1000 / DISPLAY_HZ, lastShowMs)) {
     showReadings();
-    stepRainbow();
+    updatePixel();
   }
 }
 
@@ -257,11 +262,20 @@ void handleButtons() {
   digitalWrite(WHITE_LED_PIN, buttons & ARCADA_BUTTONMASK_B);
 }
 
-void stepRainbow() {
+void updatePixel() {
   static uint16_t hue = 0;
   hue += 1280;
-  arcada.pixels.fill(arcada.pixels.ColorHSV(hue));
+  uint32_t color = pixelSetOverBle ? arcada.pixels.Color(pixelColor[0], pixelColor[1], pixelColor[2])
+                                   : arcada.pixels.ColorHSV(hue);
+  arcada.pixels.fill(color);
   arcada.pixels.show();
+}
+
+// Runs when a phone or web page writes the pixel characteristic. The fixed length
+// means the SoftDevice already rejected any write that is not exactly three bytes.
+void onPixelWrite(uint16_t connHandle, BLECharacteristic *chr, uint8_t *data, uint16_t len) {
+  memcpy(pixelColor, data, sizeof(pixelColor));
+  pixelSetOverBle = true;
 }
 
 void pulseRedLed() {
@@ -380,6 +394,11 @@ void setupBle() {
   beginNotifyChar(micChar, sizeof(readings.mic));
   beginNotifyChar(buttonsChar, sizeof(readings.buttons));
   beginNotifyChar(magFitChar, sizeof(readings.magFit));
+
+  pixelChar.setProperties(CHR_PROPS_READ | CHR_PROPS_WRITE | CHR_PROPS_WRITE_WO_RESP);
+  pixelChar.setFixedLen(sizeof(pixelColor));
+  pixelChar.setWriteCallback(onPixelWrite);
+  pixelChar.begin();
 
   Bluefruit.Advertising.addFlags(BLE_GAP_ADV_FLAGS_LE_ONLY_GENERAL_DISC_MODE);
   Bluefruit.Advertising.addService(sensorService);

@@ -23,6 +23,7 @@
   <div id="ui">
     <button id="connect">Connect to CLUE</button>
     <span id="status">Not connected</span>
+    <label>Back LED <input type="color" id="pixel" value="#000000" disabled></label>
     <table id="data"></table>
     <p>Arrows are drawn in the board's frame: <span class="accel">accel</span> should point straight up,
       <span class="mag">mag</span> should keep pointing the same way in the room as you turn the board.
@@ -38,6 +39,7 @@
     // The CLUE's BLE service and its characteristics, one per sensor. Must match begin_ble.ino.
     // Each value is little-endian floats, except buttons which is one byte.
     const SERVICE_UUID = 'c10e0001-5a7e-4a6b-9f3e-0b6f2d9a1c01';
+    const PIXEL_UUID = 'c10e000d-5a7e-4a6b-9f3e-0b6f2d9a1c01';  // writable: red, green, blue bytes
     const SENSORS = [
       { name: 'quaternion', uuid: 'c10e0002-5a7e-4a6b-9f3e-0b6f2d9a1c01', unit: 'w x y z' },
       { name: 'accel', uuid: 'c10e0003-5a7e-4a6b-9f3e-0b6f2d9a1c01', unit: 'm/s²' },
@@ -104,6 +106,7 @@
     // ---- Bluetooth ----
     const status = document.getElementById('status');
     const table = document.getElementById('data');
+    const pixelInput = document.getElementById('pixel');
 
     async function connect() {
       const device = await navigator.bluetooth.requestDevice({ filters: [{ services: [SERVICE_UUID] }] });
@@ -116,7 +119,30 @@
         characteristic.addEventListener('characteristicvaluechanged', event => onValue(sensor, event.target.value));
         await characteristic.startNotifications();
       }
+
+      const pixel = await service.getCharacteristic(PIXEL_UUID);
+      pixelInput.oninput = () => sendPixel(pixel);
+      pixelInput.disabled = false;
       status.textContent = `Connected to ${device.name}`;
+    }
+
+    // Writes the color picker's value to the board as three bytes. The picker fires faster
+    // than BLE writes finish, so skip ahead to the latest color instead of queueing them all.
+    let sendingPixel = false;
+    async function sendPixel(pixel) {
+      if (sendingPixel) {
+        return;
+      }
+      sendingPixel = true;
+      try {
+        for (let sent = null; sent !== pixelInput.value;) {
+          sent = pixelInput.value;
+          const rgb = sent.slice(1).match(/../g).map(hex => parseInt(hex, 16));
+          await pixel.writeValue(new Uint8Array(rgb));
+        }
+      } finally {
+        sendingPixel = false;
+      }
     }
 
     function onValue(sensor, data) {
