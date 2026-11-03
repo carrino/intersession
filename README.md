@@ -27,8 +27,10 @@ You should now see **Adafruit CLUE** under Tools > Board > Adafruit nRF52 Boards
 ## Every day
 
 1. Plug in the CLUE. Open the day's sketch, such as `day1/day1.ino`.
-2. Check that Tools > Board says **Adafruit CLUE** and Tools > Port shows the board. The
-   board should be picked for you; the port you may need to choose.
+2. Check that Tools > Board says **Adafruit CLUE**, which should be picked for you. Then
+   pick the board under **Tools > Port**. On Windows it is a `COM` number; on a Mac it
+   starts with `/dev/cu.usbmodem`. The port is the one thing the IDE will not choose for
+   you, and "no upload port provided" means it was skipped.
 3. Press Upload. The board's screen comes back with the sensor readings and its Bluetooth
    name, `CLUE-xxxx`.
 4. Open the day's web page, for example `day1/orientation.html`, in Chrome or Edge. Only
