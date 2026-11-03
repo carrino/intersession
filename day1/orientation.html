@@ -1,8 +1,9 @@
 <!doctype html>
 <!--
-  Shows the CLUE's orientation as a 3D board, live over Web Bluetooth.
-  Open in Chrome or Edge (Web Bluetooth is not in Safari or Firefox).
-  Opening the file directly works, or serve it with: python3 -m http.server
+  Shows the CLUE's orientation as a 3D board, live over Web Bluetooth, plus the
+  raw sensor data behind it. Open in Chrome or Edge (Web Bluetooth is not in
+  Safari or Firefox). Opening the file directly works, or serve it with:
+  python3 -m http.server
 -->
 <html>
 <head>
@@ -11,12 +12,20 @@
   <style>
     body { margin: 0; background: #111; color: #eee; font-family: sans-serif; }
     #ui { position: absolute; top: 1em; left: 1em; }
+    table { margin-top: 1em; border-collapse: collapse; font-family: monospace; }
+    th, td { padding: 0.2em 0.6em; text-align: right; }
+    th { text-align: left; }
+    .mag { color: #f0f; }
+    .accel { color: #0f0; }
   </style>
 </head>
 <body>
   <div id="ui">
     <button id="connect">Connect to CLUE</button>
     <span id="status">Not connected</span>
+    <table id="data"></table>
+    <p>Arrows are drawn in the board's frame: <span class="accel">accel</span> should point straight up,
+      <span class="mag">mag</span> should keep pointing the same way in the room as you turn the board.</p>
   </div>
 
   <script type="importmap">
@@ -27,7 +36,7 @@
 
     // Must match the UUIDs in begin_ble.ino.
     const SERVICE_UUID = 'c10e0001-5a7e-4a6b-9f3e-0b6f2d9a1c01';
-    const QUATERNION_UUID = 'c10e0002-5a7e-4a6b-9f3e-0b6f2d9a1c01';
+    const SENSORS_UUID = 'c10e0002-5a7e-4a6b-9f3e-0b6f2d9a1c01';
 
     // ---- 3D scene ----
     const scene = new THREE.Scene();
@@ -47,6 +56,11 @@
 
     const board = buildBoard();
     scene.add(board);
+
+    // Sensor vectors are measured in the board's frame, so the arrows live on the board.
+    const magArrow = new THREE.ArrowHelper(new THREE.Vector3(0, 1, 0), new THREE.Vector3(), 1.5, 0xff00ff);
+    const accelArrow = new THREE.ArrowHelper(new THREE.Vector3(0, 0, 1), new THREE.Vector3(), 1.5, 0x00ff00);
+    board.add(magArrow, accelArrow);
 
     // A board shaped like the CLUE: x right, y toward the USB plug, z out of the screen.
     function buildBoard() {
@@ -70,6 +84,7 @@
 
     // ---- Bluetooth ----
     const status = document.getElementById('status');
+    const table = document.getElementById('data');
 
     async function connect() {
       const device = await navigator.bluetooth.requestDevice({ filters: [{ services: [SERVICE_UUID] }] });
@@ -77,17 +92,45 @@
 
       const server = await device.gatt.connect();
       const service = await server.getPrimaryService(SERVICE_UUID);
-      const quaternion = await service.getCharacteristic(QUATERNION_UUID);
-      quaternion.addEventListener('characteristicvaluechanged', onQuaternion);
-      await quaternion.startNotifications();
+      const sensors = await service.getCharacteristic(SENSORS_UUID);
+      sensors.addEventListener('characteristicvaluechanged', onPacket);
+      await sensors.startNotifications();
       status.textContent = `Connected to ${device.name}`;
     }
 
-    // The CLUE sends four little-endian floats: w, x, y, z.
-    function onQuaternion(event) {
+    // The CLUE sends 13 little-endian floats, in the order of its SensorPacket struct.
+    const PACKET_BYTES = 13 * 4;
+    const UNITS = { quaternion: '', accel: 'm/s²', gyro: 'rad/s', mag: 'µT' };
+
+    function onPacket(event) {
       const data = event.target.value;
-      const [w, x, y, z] = [0, 4, 8, 12].map(offset => data.getFloat32(offset, true));
+      if (data.byteLength !== PACKET_BYTES) {
+        status.textContent = `Got ${data.byteLength} bytes, expected ${PACKET_BYTES} (BLE MTU too small?)`;
+        return;
+      }
+      const f = i => data.getFloat32(i * 4, true);
+      const packet = {
+        quaternion: [f(0), f(1), f(2), f(3)],  // w, x, y, z
+        accel: [f(4), f(5), f(6)],
+        gyro: [f(7), f(8), f(9)],
+        mag: [f(10), f(11), f(12)],
+      };
+
+      const [w, x, y, z] = packet.quaternion;
       board.quaternion.set(x, y, z, w);
+      magArrow.setDirection(new THREE.Vector3(...packet.mag).normalize());
+      accelArrow.setDirection(new THREE.Vector3(...packet.accel).normalize());
+      showTable(packet);
+    }
+
+    function showTable(packet) {
+      const row = (name, values) => {
+        const [w, x, y, z] = values.length === 4 ? values : ['', ...values];
+        const cells = [w, x, y, z, Math.hypot(...values), UNITS[name]];
+        return `<tr><th class="${name}">${name}</th>${cells.map(c => `<td>${typeof c === 'number' ? c.toFixed(2) : c}</td>`).join('')}</tr>`;
+      };
+      table.innerHTML = '<tr><th></th><th>w</th><th>x</th><th>y</th><th>z</th><th>|v|</th><th></th></tr>'
+        + Object.entries(packet).map(([name, values]) => row(name, values)).join('');
     }
 
     if (navigator.bluetooth) {
