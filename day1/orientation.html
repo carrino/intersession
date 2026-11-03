@@ -34,24 +34,21 @@
   <script type="module">
     import * as THREE from 'three';
 
-    // Must match the UUIDs in begin_ble.ino.
+    // The CLUE's BLE service and its characteristics, one per sensor. Must match begin_ble.ino.
+    // Each value is little-endian floats, except buttons which is one byte.
     const SERVICE_UUID = 'c10e0001-5a7e-4a6b-9f3e-0b6f2d9a1c01';
-    const SENSORS_UUID = 'c10e0002-5a7e-4a6b-9f3e-0b6f2d9a1c01';
-
-    // The fields of the CLUE's SensorPacket, in order: name, how many floats, unit.
-    const LAYOUT = [
-      ['quaternion', 4, 'w x y z'],
-      ['accel', 3, 'm/s²'],
-      ['gyro', 3, 'rad/s'],
-      ['mag', 3, 'µT'],
-      ['temperature', 1, '°C'],
-      ['pressure', 1, 'hPa'],
-      ['humidity', 1, '%'],
-      ['color', 4, 'r g b clear'],
-      ['mic', 1, 'peak to peak'],
-      ['buttons', 1, 'A=1 B=2'],
+    const SENSORS = [
+      { name: 'quaternion', uuid: 'c10e0002-5a7e-4a6b-9f3e-0b6f2d9a1c01', unit: 'w x y z' },
+      { name: 'accel', uuid: 'c10e0003-5a7e-4a6b-9f3e-0b6f2d9a1c01', unit: 'm/s²' },
+      { name: 'gyro', uuid: 'c10e0004-5a7e-4a6b-9f3e-0b6f2d9a1c01', unit: 'rad/s' },
+      { name: 'mag', uuid: 'c10e0005-5a7e-4a6b-9f3e-0b6f2d9a1c01', unit: 'µT' },
+      { name: 'temperature', uuid: 'c10e0006-5a7e-4a6b-9f3e-0b6f2d9a1c01', unit: '°C' },
+      { name: 'pressure', uuid: 'c10e0007-5a7e-4a6b-9f3e-0b6f2d9a1c01', unit: 'hPa' },
+      { name: 'humidity', uuid: 'c10e0008-5a7e-4a6b-9f3e-0b6f2d9a1c01', unit: '%' },
+      { name: 'color', uuid: 'c10e0009-5a7e-4a6b-9f3e-0b6f2d9a1c01', unit: 'r g b clear' },
+      { name: 'mic', uuid: 'c10e000a-5a7e-4a6b-9f3e-0b6f2d9a1c01', unit: 'peak to peak' },
+      { name: 'buttons', uuid: 'c10e000b-5a7e-4a6b-9f3e-0b6f2d9a1c01', unit: 'A=1 B=2' },
     ];
-    const PACKET_FLOATS = LAYOUT.reduce((sum, [, count]) => sum + count, 0);
 
     // ---- 3D scene ----
     const scene = new THREE.Scene();
@@ -95,7 +92,12 @@
     }
     addEventListener('resize', resize);
     resize();
-    renderer.setAnimationLoop(() => renderer.render(scene, camera));
+
+    const latest = {};  // name -> array of the most recent values from that sensor
+    renderer.setAnimationLoop(() => {
+      renderer.render(scene, camera);
+      showTable();
+    });
 
     // ---- Bluetooth ----
     const status = document.getElementById('status');
@@ -107,46 +109,36 @@
 
       const server = await device.gatt.connect();
       const service = await server.getPrimaryService(SERVICE_UUID);
-      const sensors = await service.getCharacteristic(SENSORS_UUID);
-      sensors.addEventListener('characteristicvaluechanged', onPacket);
-      await sensors.startNotifications();
+      for (const sensor of SENSORS) {
+        const characteristic = await service.getCharacteristic(sensor.uuid);
+        characteristic.addEventListener('characteristicvaluechanged', event => onValue(sensor, event.target.value));
+        await characteristic.startNotifications();
+      }
       status.textContent = `Connected to ${device.name}`;
     }
 
-    function onPacket(event) {
-      const data = event.target.value;
-      if (data.byteLength !== PACKET_FLOATS * 4) {
-        status.textContent = `Got ${data.byteLength} bytes, expected ${PACKET_FLOATS * 4} (BLE MTU too small?)`;
-        return;
-      }
-      const packet = parsePacket(data);
+    function onValue(sensor, data) {
+      const values = data.byteLength === 1
+        ? [data.getUint8(0)]
+        : Array.from({ length: data.byteLength / 4 }, (_, i) => data.getFloat32(4 * i, true));
+      latest[sensor.name] = values;
 
-      const [w, x, y, z] = packet.quaternion;
-      board.quaternion.set(x, y, z, w);
-      magArrow.setDirection(new THREE.Vector3(...packet.mag).normalize());
-      accelArrow.setDirection(new THREE.Vector3(...packet.accel).normalize());
-      showTable(packet);
+      if (sensor.name === 'quaternion') {
+        const [w, x, y, z] = values;
+        board.quaternion.set(x, y, z, w);
+      } else if (sensor.name === 'mag') {
+        magArrow.setDirection(new THREE.Vector3(...values).normalize());
+      } else if (sensor.name === 'accel') {
+        accelArrow.setDirection(new THREE.Vector3(...values).normalize());
+      }
     }
 
-    // Splits the packet's little-endian floats into {name: [values]} following LAYOUT.
-    function parsePacket(data) {
-      const packet = {};
-      let i = 0;
-      for (const [name, count] of LAYOUT) {
-        packet[name] = [];
-        for (let n = 0; n < count; n++) {
-          packet[name].push(data.getFloat32(4 * i++, true));
-        }
-      }
-      return packet;
-    }
-
-    // One row per field: its values, the vector length for 3-vectors, then the unit.
-    function showTable(packet) {
+    // One row per sensor: its values, the vector length for 3-vectors, then the unit.
+    function showTable() {
       const cell = v => `<td>${v.toFixed(2)}</td>`;
-      table.innerHTML = LAYOUT.map(([name, count, unit]) => {
-        const values = packet[name];
-        const length = count === 3 ? `<td>|v| ${Math.hypot(...values).toFixed(2)}</td>` : '';
+      table.innerHTML = SENSORS.map(({ name, unit }) => {
+        const values = latest[name] || [];
+        const length = values.length === 3 ? `<td>|v| ${Math.hypot(...values).toFixed(2)}</td>` : '';
         return `<tr><th class="${name}">${name}</th>${values.map(cell).join('')}${length}<td>${unit}</td></tr>`;
       }).join('');
     }

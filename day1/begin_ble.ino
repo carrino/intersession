@@ -1,5 +1,5 @@
 // Day 1: the CLUE factory demo, plus an orientation fused from the motion
-// sensors and every reading streamed over Bluetooth LE to orientation.html.
+// sensors and every reading published over Bluetooth LE for orientation.html.
 //
 // Libraries (Arduino Library Manager unless noted): Adafruit Arcada, Adafruit LSM6DS,
 //   Adafruit LIS3MDL, Adafruit SHT31, Adafruit APDS9960, Adafruit BMP280, and the
@@ -19,22 +19,37 @@
 
 const int WHITE_LED_PIN = 43;
 const int IMU_INTERRUPT_PIN = 45;  // the CLUE wires the IMU's INT1 to P1.06, pin 45 in Arduino
-const int SEND_HZ = 30;            // packets to the web page per second
+
+// How often each group of sensors is read and sent, in notifications per second.
+const int MOTION_HZ = 30;       // quaternion, accel, gyro, mag
+const int LIGHT_MIC_HZ = 10;    // color, mic
+const int ENVIRONMENT_HZ = 2;   // temperature, pressure, humidity: slow to read and slow to change
 const int DISPLAY_HZ = 5;
-const int ENVIRONMENT_HZ = 2;      // temperature, pressure and humidity are slow to read and slow to change
 
 // How far toward the accelerometer's idea of "down" we move on each update.
 // Small is smooth but slow to fix gyro drift; large is quick but jittery.
 const float ACCEL_CORRECTION = 0.005;
 
-// Our own BLE service. orientation.html looks for these same UUIDs.
-const char *ORIENTATION_SERVICE_UUID = "c10e0001-5a7e-4a6b-9f3e-0b6f2d9a1c01";
-const char *SENSORS_UUID = "c10e0002-5a7e-4a6b-9f3e-0b6f2d9a1c01";
+// Our own BLE service, one characteristic per sensor. Every value is little-endian
+// floats, except buttons which is one byte. orientation.html lists the same UUIDs.
+BLEService sensorService("c10e0001-5a7e-4a6b-9f3e-0b6f2d9a1c01");
+BLECharacteristic quaternionChar("c10e0002-5a7e-4a6b-9f3e-0b6f2d9a1c01");
+BLECharacteristic accelChar("c10e0003-5a7e-4a6b-9f3e-0b6f2d9a1c01");
+BLECharacteristic gyroChar("c10e0004-5a7e-4a6b-9f3e-0b6f2d9a1c01");
+BLECharacteristic magChar("c10e0005-5a7e-4a6b-9f3e-0b6f2d9a1c01");
+BLECharacteristic temperatureChar("c10e0006-5a7e-4a6b-9f3e-0b6f2d9a1c01");
+BLECharacteristic pressureChar("c10e0007-5a7e-4a6b-9f3e-0b6f2d9a1c01");
+BLECharacteristic humidityChar("c10e0008-5a7e-4a6b-9f3e-0b6f2d9a1c01");
+BLECharacteristic colorChar("c10e0009-5a7e-4a6b-9f3e-0b6f2d9a1c01");
+BLECharacteristic micChar("c10e000a-5a7e-4a6b-9f3e-0b6f2d9a1c01");
+BLECharacteristic buttonsChar("c10e000b-5a7e-4a6b-9f3e-0b6f2d9a1c01");
 
-// The latest reading from every sensor. One BLE notification carries the whole thing.
-// It is all floats, so there is no padding and the web page reads it as 22
-// little-endian floats in this order.
-struct SensorPacket {
+// We send about 150 notifications a second across all characteristics. The SoftDevice
+// default queue holds just one, and notify() stalls for up to 100 ms when it is full.
+const int BLE_NOTIFY_QUEUE = 16;
+
+// The latest reading from every sensor. The screen and BLE both read from here.
+struct Readings {
   float quaternion[4];  // w, x, y, z
   float accel[3];       // m/s^2
   float gyro[3];        // rad/s
@@ -44,8 +59,9 @@ struct SensorPacket {
   float humidity;       // percent
   float color[4];       // red, green, blue, clear light counts
   float mic;            // peak-to-peak amplitude
-  float buttons;        // bit 0 = A, bit 1 = B
+  uint8_t buttons;      // bit 0 = A, bit 1 = B
 };
+Readings readings;
 
 Adafruit_Arcada arcada;
 extern Adafruit_SPIFlash Arcada_QSPI_Flash;
@@ -59,11 +75,6 @@ Adafruit_SHT31 sht30;
 Adafruit_APDS9960 apds9960;
 Adafruit_BMP280 bmp280;
 
-BLEService orientationService(ORIENTATION_SERVICE_UUID);
-BLECharacteristic sensorsChar(SENSORS_UUID, CHR_PROPS_READ | CHR_PROPS_NOTIFY, sizeof(SensorPacket), true);
-
-SensorPacket packet;
-
 // Rotation from the board's frame (x right, y toward USB, z out of the screen)
 // to the world frame, where z is up.
 Quaternion orientation;
@@ -73,7 +84,7 @@ Quaternion orientation;
 volatile bool sampleReady = false;
 volatile uint32_t sampleCycles = 0;
 
-// Quietest and loudest microphone sample since the last packet, kept by the PDM callback.
+// Quietest and loudest microphone sample since last checked, kept by the PDM callback.
 volatile int16_t micMin = INT16_MAX, micMax = INT16_MIN;
 int16_t micSamples[256];
 
@@ -94,20 +105,31 @@ void setup() {
 }
 
 void loop() {
-  static uint32_t lastSendMs = 0, lastShowMs = 0, lastEnvironmentMs = 0;
+  static uint32_t lastMotionMs = 0, lastLightMicMs = 0, lastEnvironmentMs = 0, lastShowMs = 0;
 
   // Data-ready stays high until we read, so also go when it is already high: a sample
   // that landed before we attached the interrupt never produces a rising edge.
   if (sampleReady || digitalRead(IMU_INTERRUPT_PIN)) {
     readImu();
   }
+  if (every(1000 / MOTION_HZ, lastMotionMs)) {
+    readMag();
+    quaternionChar.notify(readings.quaternion, sizeof(readings.quaternion));
+    accelChar.notify(readings.accel, sizeof(readings.accel));
+    gyroChar.notify(readings.gyro, sizeof(readings.gyro));
+    magChar.notify(readings.mag, sizeof(readings.mag));
+    handleButtons();
+  }
+  if (every(1000 / LIGHT_MIC_HZ, lastLightMicMs)) {
+    readLightAndMic();
+    colorChar.notify(readings.color, sizeof(readings.color));
+    micChar.notify32(readings.mic);
+  }
   if (every(1000 / ENVIRONMENT_HZ, lastEnvironmentMs)) {
     readEnvironment();
-  }
-  if (every(1000 / SEND_HZ, lastSendMs)) {
-    readOtherSensors();
-    handleButtons();
-    sensorsChar.notify(&packet, sizeof(packet));
+    temperatureChar.notify32(readings.temperature);
+    pressureChar.notify32(readings.pressure);
+    humidityChar.notify32(readings.humidity);
   }
   if (every(1000 / DISPLAY_HZ, lastShowMs)) {
     showReadings();
@@ -132,12 +154,12 @@ void readImu() {
   imu->getEvent(&accel, &gyro, &temp);
   updateOrientation(accel, gyro, dt);
 
-  copyVector(packet.accel, accel.acceleration);
-  copyVector(packet.gyro, gyro.gyro);
-  packet.quaternion[0] = orientation.a;
-  packet.quaternion[1] = orientation.b;
-  packet.quaternion[2] = orientation.c;
-  packet.quaternion[3] = orientation.d;
+  copyVector(readings.accel, accel.acceleration);
+  copyVector(readings.gyro, gyro.gyro);
+  readings.quaternion[0] = orientation.a;
+  readings.quaternion[1] = orientation.b;
+  readings.quaternion[2] = orientation.c;
+  readings.quaternion[3] = orientation.d;
 }
 
 // The gyro says how we turned since last time; the accelerometer says which way
@@ -157,29 +179,31 @@ void updateOrientation(const sensors_event_t &accel, const sensors_event_t &gyro
   orientation *= correction.fractional(ACCEL_CORRECTION);
 }
 
+void readMag() {
+  sensors_event_t mag;
+  lis3mdl.getEvent(&mag);
+  copyVector(readings.mag, mag.magnetic);
+}
+
 // ---- The other sensors ----
 
 void readEnvironment() {
-  packet.temperature = bmp280.readTemperature();
-  packet.pressure = bmp280.readPressure() / 100;
-  packet.humidity = sht30.readHumidity();
+  readings.temperature = bmp280.readTemperature();
+  readings.pressure = bmp280.readPressure() / 100;
+  readings.humidity = sht30.readHumidity();
 }
 
-void readOtherSensors() {
-  sensors_event_t mag;
-  lis3mdl.getEvent(&mag);
-  copyVector(packet.mag, mag.magnetic);
-
+void readLightAndMic() {
   if (apds9960.colorDataReady()) {
     uint16_t r, g, b, c;
     apds9960.getColorData(&r, &g, &b, &c);
-    packet.color[0] = r;
-    packet.color[1] = g;
-    packet.color[2] = b;
-    packet.color[3] = c;
+    readings.color[0] = r;
+    readings.color[1] = g;
+    readings.color[2] = b;
+    readings.color[3] = c;
   }
 
-  packet.mic = micMax - micMin;
+  readings.mic = micMax - micMin;
   micMin = INT16_MAX;  // so the next sample becomes both the min and the max
   micMax = INT16_MIN;
 }
@@ -199,8 +223,11 @@ void onMicData() {
 
 // Same as the factory demo: A beeps, B lights the white LEDs.
 void handleButtons() {
-  uint8_t buttons = arcada.readButtons();
-  packet.buttons = buttons & (ARCADA_BUTTONMASK_A | ARCADA_BUTTONMASK_B);
+  uint8_t buttons = arcada.readButtons() & (ARCADA_BUTTONMASK_A | ARCADA_BUTTONMASK_B);
+  if (buttons != readings.buttons) {
+    readings.buttons = buttons;
+    buttonsChar.notify8(buttons);
+  }
 
   if (buttons & ARCADA_BUTTONMASK_A) {
     tone(ARCADA_AUDIO_OUT, 4000, 100);
@@ -307,7 +334,8 @@ void setupImu() {
 }
 
 void setupBle() {
-  Bluefruit.configPrphBandwidth(BANDWIDTH_MAX);  // allow a big enough MTU for the whole packet
+  // (max MTU, max connection event length in 1.25 ms units, notify queue, write queue)
+  Bluefruit.configPrphConn(247, 100, BLE_NOTIFY_QUEUE, 1);
   Bluefruit.begin();
   Bluefruit.Periph.setConnectCallback(onConnect);
 
@@ -320,24 +348,38 @@ void setupBle() {
   arcada.display->print("BLE: ");
   arcada.display->println(name);
 
-  orientationService.begin();
-  sensorsChar.begin();  // characteristics join the most recently begun service
+  sensorService.begin();  // characteristics join the most recently begun service
+  beginNotifyChar(quaternionChar, sizeof(readings.quaternion));
+  beginNotifyChar(accelChar, sizeof(readings.accel));
+  beginNotifyChar(gyroChar, sizeof(readings.gyro));
+  beginNotifyChar(magChar, sizeof(readings.mag));
+  beginNotifyChar(temperatureChar, sizeof(readings.temperature));
+  beginNotifyChar(pressureChar, sizeof(readings.pressure));
+  beginNotifyChar(humidityChar, sizeof(readings.humidity));
+  beginNotifyChar(colorChar, sizeof(readings.color));
+  beginNotifyChar(micChar, sizeof(readings.mic));
+  beginNotifyChar(buttonsChar, sizeof(readings.buttons));
 
   Bluefruit.Advertising.addFlags(BLE_GAP_ADV_FLAGS_LE_ONLY_GENERAL_DISC_MODE);
-  Bluefruit.Advertising.addService(orientationService);
+  Bluefruit.Advertising.addService(sensorService);
   Bluefruit.Advertising.addName();
   Bluefruit.Advertising.restartOnDisconnect(true);
   Bluefruit.Advertising.start(0);  // 0 = keep advertising until connected
 }
 
-// Ask the laptop or phone for the fast BLE 5 radio settings: the 2 Mbit PHY, link-layer
-// packets big enough to carry our packet whole, and a matching MTU. Each one is a
-// request that the other side is free to turn down.
+// A characteristic anyone can read or subscribe to, holding a fixed number of bytes.
+void beginNotifyChar(BLECharacteristic &chr, int bytes) {
+  chr.setProperties(CHR_PROPS_READ | CHR_PROPS_NOTIFY);
+  chr.setFixedLen(bytes);
+  chr.begin();
+}
+
+// Ask the laptop or phone for the fast BLE 5 radio settings: the 2 Mbit PHY and
+// bigger link-layer packets. Each one is a request that the other side may turn down.
 void onConnect(uint16_t connHandle) {
   BLEConnection *conn = Bluefruit.Connection(connHandle);
   conn->requestPHY(BLE_GAP_PHY_2MBPS);
   conn->requestDataLengthUpdate();
-  conn->requestMtuExchange(sizeof(SensorPacket) + 3);  // +3 for the ATT notification header
 }
 
 // ---- Screen, laid out like the factory demo ----
@@ -345,14 +387,14 @@ void onConnect(uint16_t connHandle) {
 void showReadings() {
   arcada.display->setTextColor(ARCADA_WHITE, ARCADA_BLACK);
   arcada.display->setCursor(0, 100);
-  showValue("Temp: ", packet.temperature, 2, " C");
-  showValue("Baro: ", packet.pressure, 2, " hPa");
-  showValue("Humid: ", packet.humidity, 2, " %");
-  showValue("Light: ", packet.color[3], 0, "");
-  showVector("Accel:", packet.accel);
-  showVector("Gyro:", packet.gyro);
-  showVector("Mag:", packet.mag);
-  showValue("Mic: ", packet.mic, 0, "");
+  showValue("Temp: ", readings.temperature, 2, " C");
+  showValue("Baro: ", readings.pressure, 2, " hPa");
+  showValue("Humid: ", readings.humidity, 2, " %");
+  showValue("Light: ", readings.color[3], 0, "");
+  showVector("Accel:", readings.accel);
+  showVector("Gyro:", readings.gyro);
+  showVector("Mag:", readings.mag);
+  showValue("Mic: ", readings.mic, 0, "");
 }
 
 // Trailing spaces on each line erase leftovers from a previous longer value.
