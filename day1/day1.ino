@@ -30,7 +30,7 @@ const int IMU_INTERRUPT_PIN = 45;  // the IMU's INT1 is on P1.06, pin 45 in Ardu
 const int QUATERNION_HZ = 30;   // the orientation, the one thing the page needs fast
 const int DEBUG_HZ = 10;        // accel, gyro, mag, color, proximity, mic
 const int ENVIRONMENT_HZ = 2;   // temperature, pressure, humidity: slow to read and slow to change
-const int DISPLAY_LINES_HZ = 20;  // one line of the screen per tick, so 8 lines refresh every 0.4 s
+const int DISPLAY_LINES_HZ = 20;  // one line of the screen per tick, so 9 lines refresh every 0.45 s
 
 // How far toward the accelerometer's idea of "down" we move on each update.
 // Small is smooth but slow to fix gyro drift; large is quick but jittery.
@@ -50,6 +50,11 @@ BLECharacteristic buttonsChar("c10e000b-5a7e-4a6b-9f3e-0b6f2d9a1c01");
 BLECharacteristic magFitChar("c10e000c-5a7e-4a6b-9f3e-0b6f2d9a1c01");
 BLECharacteristic pixelChar("c10e000d-5a7e-4a6b-9f3e-0b6f2d9a1c01");  // writable: red, green, blue bytes
 BLECharacteristic proximityChar("c10e000e-5a7e-4a6b-9f3e-0b6f2d9a1c01");
+BLECharacteristic statsChar("c10e000f-5a7e-4a6b-9f3e-0b6f2d9a1c01");  // how the fusion is doing
+
+// send() drops a packet when the radio queue is full rather than waiting, so the queue
+// only needs to cover a burst of a few packets in one loop pass.
+const int BLE_NOTIFY_QUEUE = 8;
 
 // The raw motion vectors, low-pass filtered for the screen and the page. They travel
 // together in one BLE packet: 9 floats.
@@ -63,7 +68,8 @@ struct Vectors {
 struct Readings {
   float quaternion[4];  // w, x, y, z
   Vectors vectors;
-  float magFit[5];      // fitted offset x, y, z, sphere radius (microtesla), directions covered of 6
+  float magFit[5];      // fitted offset x, y, z, sphere radius (microtesla), faces seen as bits +x -x +y -y +z -z
+  float stats[2];       // IMU samples fused per second; angle in degrees between gyro's down and accel's down
   float temperature;    // C
   float pressure;       // hPa
   float humidity;       // percent
@@ -76,6 +82,9 @@ Readings readings;
 
 // The NeoPixel on the back of the board stays off until something writes a color over BLE.
 uint8_t pixelColor[3] = {0, 0, 0};
+
+int readingsTop = 0;  // screen row where the live readings start, below the startup lines
+int imuSamples = 0;   // fused since the last stats update
 
 Adafruit_ST7789 display(&SPI1, TFT_CS_PIN, TFT_DC_PIN, TFT_RESET_PIN);
 Adafruit_NeoPixel pixel(1, NEOPIXEL_PIN, NEO_GRB + NEO_KHZ800);
@@ -123,6 +132,7 @@ void setup() {
   setupImu();
   setupBle();
   display.setTextWrap(false);
+  readingsTop = display.getCursorY() + 8;  // just below the BLE name and any warnings
 }
 
 void loop() {
@@ -148,7 +158,9 @@ void loop() {
   if (every(1000 / ENVIRONMENT_HZ, lastEnvironmentMs)) {
     readEnvironment();
     fitMag();
+    updateStats();
     send(magFitChar, readings.magFit, sizeof(readings.magFit));
+    send(statsChar, readings.stats, sizeof(readings.stats));
     send(temperatureChar, &readings.temperature, sizeof(readings.temperature));
     send(pressureChar, &readings.pressure, sizeof(readings.pressure));
     send(humidityChar, &readings.humidity, sizeof(readings.humidity));
@@ -170,6 +182,7 @@ void onImuDataReady() {
 void readImu() {
   static uint32_t lastSampleCycles = DWT->CYCCNT;
   sampleReady = false;
+  imuSamples++;
   float dt = (float)(sampleCycles - lastSampleCycles) / SystemCoreClock;
   lastSampleCycles = sampleCycles;
 
@@ -215,6 +228,12 @@ void updateOrientation(const float accel[3], const float gyro[3], float dt) {
   // Rotate a fraction of the way from where we think down is to where the accelerometer says it is.
   Quaternion correction = measuredDown.rotation_between_vectors(expectedDown);
   orientation *= correction.fractional(ACCEL_CORRECTION);
+  readings.stats[1] = acos(constrain(measuredDown.dot_product(expectedDown), -1, 1)) * 180 / PI;
+}
+
+void updateStats() {
+  readings.stats[0] = imuSamples * ENVIRONMENT_HZ;
+  imuSamples = 0;
 }
 
 void readMag() {
@@ -235,7 +254,7 @@ void fitMag() {
     readings.magFit[i] = magCalibration.offset[i];
   }
   readings.magFit[3] = magCalibration.radius;
-  readings.magFit[4] = magCalibration.directionsCovered();
+  readings.magFit[4] = magCalibration.directionsSeen();
 }
 
 // ---- The other sensors ----
@@ -382,6 +401,8 @@ void measureGyroBias() {
 }
 
 void setupBle() {
+  // (max MTU, max connection event length in 1.25 ms units, notify queue, write queue)
+  Bluefruit.configPrphConn(247, 100, BLE_NOTIFY_QUEUE, 1);
   Bluefruit.begin();
   Bluefruit.Periph.setConnectCallback(onConnect);
 
@@ -405,6 +426,7 @@ void setupBle() {
   beginNotifyChar(micChar, sizeof(readings.mic));
   beginNotifyChar(buttonsChar, sizeof(readings.buttons));
   beginNotifyChar(magFitChar, sizeof(readings.magFit));
+  beginNotifyChar(statsChar, sizeof(readings.stats));
 
   pixelChar.setProperties(CHR_PROPS_READ | CHR_PROPS_WRITE | CHR_PROPS_WRITE_WO_RESP);
   pixelChar.setFixedLen(sizeof(pixelColor));
@@ -457,22 +479,23 @@ bool send(BLECharacteristic &chr, const void *data, uint16_t len) {
 // ---- Screen, laid out like the factory demo ----
 
 // Drawing the whole screen at once takes long enough to hold up BLE packets and IMU
-// samples, so each call draws just one of the eight lines.
+// samples, so each call draws just one of the nine lines.
 void showNextLine() {
   static int line = 0;
   display.setTextColor(ST77XX_WHITE, ST77XX_BLACK);
-  display.setCursor(0, 100 + line * 16);
+  display.setCursor(0, readingsTop + line * 16);
   switch (line) {
     case 0: showValue("Temp: ", readings.temperature, 2, " C"); break;
     case 1: showValue("Baro: ", readings.pressure, 2, " hPa"); break;
     case 2: showValue("Humid: ", readings.humidity, 2, " %"); break;
     case 3: showValue("Light: ", readings.color[3], 0, ""); break;
-    case 4: showVector("Accel:", readings.vectors.accel); break;
-    case 5: showVector("Gyro:", readings.vectors.gyro); break;
-    case 6: showVector("Mag:", readings.vectors.mag); break;
-    case 7: showValue("Mic: ", readings.mic, 0, ""); break;
+    case 4: showValue("Prox: ", readings.proximity, 0, ""); break;
+    case 5: showVector("Accel:", readings.vectors.accel); break;
+    case 6: showVector("Gyro:", readings.vectors.gyro); break;
+    case 7: showVector("Mag:", readings.vectors.mag); break;
+    case 8: showValue("Mic: ", readings.mic, 0, ""); break;
   }
-  line = (line + 1) % 8;
+  line = (line + 1) % 9;
 }
 
 // Trailing spaces on each line erase leftovers from a previous longer value.

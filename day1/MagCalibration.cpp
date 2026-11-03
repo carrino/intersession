@@ -12,8 +12,8 @@ const float MIN_RADIUS = 20;
 const float MAX_RADIUS = 100;
 
 // A direction counts once the gravity direction's dot product with that axis reaches this,
-// which is within about 45 degrees of pointing that face straight down.
-const float MIN_DOT = 0.7;
+// which is within 60 degrees of pointing that face straight down.
+const float MIN_DOT = 0.5;
 
 void MagCalibration::add(const float mag[3], const float accel[3]) {
   // Which axis is down lined up with? Only trust the accelerometer when it is reading close
@@ -58,6 +58,14 @@ int MagCalibration::directionsCovered() const {
     covered += directionSeen[i];
   }
   return covered;
+}
+
+int MagCalibration::directionsSeen() const {
+  int bits = 0;
+  for (int i = 0; i < 6; i++) {
+    bits |= directionSeen[i] << i;
+  }
+  return bits;
 }
 
 bool MagCalibration::solve() {

@@ -52,7 +52,8 @@
       { uuid: 'c10e000e-5a7e-4a6b-9f3e-0b6f2d9a1c01', fields: [['proximity', 1, '0 far to 255 near']] },
       { uuid: 'c10e000a-5a7e-4a6b-9f3e-0b6f2d9a1c01', fields: [['mic', 1, 'peak to peak']] },
       { uuid: 'c10e000b-5a7e-4a6b-9f3e-0b6f2d9a1c01', fields: [['buttons', 1, 'A=1 B=2']] },
-      { uuid: 'c10e000c-5a7e-4a6b-9f3e-0b6f2d9a1c01', fields: [['mag fit', 5, 'offset x y z, radius µT, faces of 6']] },
+      { uuid: 'c10e000c-5a7e-4a6b-9f3e-0b6f2d9a1c01', fields: [['mag fit', 5, 'offset x y z, radius µT, faces seen']] },
+      { uuid: 'c10e000f-5a7e-4a6b-9f3e-0b6f2d9a1c01', fields: [['stats', 2, 'IMU samples/s, tilt error °']] },
     ];
 
     // ---- 3D scene ----
@@ -140,6 +141,11 @@
 
     // Splits a characteristic's bytes into its fields and keeps the latest values.
     function onValue(spec, data) {
+      const expected = spec.fields.reduce((sum, [, count]) => sum + 4 * count, 0);
+      if (data.byteLength !== 1 && data.byteLength < expected) {
+        status.textContent = `${spec.fields[0][0]} packet is ${data.byteLength} bytes, expected ${expected} (BLE MTU too small?)`;
+        return;
+      }
       let offset = 0;
       for (const [name, count] of spec.fields) {
         latest[name] = data.byteLength === 1
@@ -171,6 +177,9 @@
         if (count === 3 && values.length) {
           cells.push(`|v| ${Math.hypot(...values).toFixed(2)}`);
         }
+        if (name === 'mag fit' && values.length) {
+          cells[4] = facesSeen(values[4]);
+        }
         while (cells.length < 5) {
           cells.push('');  // pad so the unit and rate columns line up across rows
         }
@@ -178,6 +187,11 @@
         return `<tr><th class="${name}">${name}</th>${cells.map(c => `<td>${c}</td>`).join('')}<td>${unit}</td><td>${rate}</td></tr>`;
       });
       table.innerHTML = rows.join('');
+    }
+
+    // The mag fit's last value is a bit per face the board has pointed at the floor.
+    function facesSeen(bits) {
+      return ['+x', '-x', '+y', '-y', '+z', '-z'].filter((_, i) => bits & (1 << i)).join(' ') || 'none';
     }
 
     // Writes the color picker's value to the board as three bytes. The picker fires faster
