@@ -46,6 +46,7 @@ BLECharacteristic micChar("c10e000a-5a7e-4a6b-9f3e-0b6f2d9a1c01");
 BLECharacteristic buttonsChar("c10e000b-5a7e-4a6b-9f3e-0b6f2d9a1c01");
 BLECharacteristic magFitChar("c10e000c-5a7e-4a6b-9f3e-0b6f2d9a1c01");
 BLECharacteristic pixelChar("c10e000d-5a7e-4a6b-9f3e-0b6f2d9a1c01");  // writable: red, green, blue bytes
+BLECharacteristic proximityChar("c10e000e-5a7e-4a6b-9f3e-0b6f2d9a1c01");
 
 // We send about 150 notifications a second across all characteristics. The SoftDevice
 // default queue holds just one, and notify() stalls for up to 100 ms when it is full.
@@ -57,11 +58,12 @@ struct Readings {
   float accel[3];       // m/s^2
   float gyro[3];        // rad/s
   float mag[3];         // microtesla, with the hard-iron offset removed
-  float magFit[4];      // the fitted offset x, y, z and sphere radius, microtesla
+  float magFit[5];      // fitted offset x, y, z, sphere radius (microtesla), octants covered of 8
   float temperature;    // C
   float pressure;       // hPa
   float humidity;       // percent
   float color[4];       // red, green, blue, clear light counts
+  float proximity;      // 0 far to 255 near
   float mic;            // peak-to-peak amplitude
   uint8_t buttons;      // bit 0 = A, bit 1 = B
 };
@@ -132,6 +134,7 @@ void loop() {
   if (every(1000 / LIGHT_MIC_HZ, lastLightMicMs)) {
     readLightAndMic();
     colorChar.notify(readings.color, sizeof(readings.color));
+    proximityChar.notify32(readings.proximity);
     micChar.notify32(readings.mic);
   }
   if (every(1000 / ENVIRONMENT_HZ, lastEnvironmentMs)) {
@@ -193,21 +196,22 @@ void updateOrientation(const sensors_event_t &accel, const sensors_event_t &gyro
 void readMag() {
   sensors_event_t mag;
   lis3mdl.getEvent(&mag);
-  magCalibration.add(mag.magnetic.x, mag.magnetic.y, mag.magnetic.z);
+  magCalibration.add(mag.magnetic.v, readings.accel);
   copyVector(readings.mag, mag.magnetic);
   for (int i = 0; i < 3; i++) {
     readings.mag[i] -= magCalibration.offset[i];
   }
 }
 
-// Refit the hard-iron offset from the readings so far. Turning the board through all
-// orientations gives it the whole sphere to work with.
+// Refit the hard-iron offset from the readings so far. The fit only switches on once
+// every corner of the board has been tipped toward the floor, face up and face down.
 void fitMag() {
   magCalibration.solve();
   for (int i = 0; i < 3; i++) {
     readings.magFit[i] = magCalibration.offset[i];
   }
   readings.magFit[3] = magCalibration.radius;
+  readings.magFit[4] = magCalibration.octantsCovered();
 }
 
 // ---- The other sensors ----
@@ -227,6 +231,7 @@ void readLightAndMic() {
     readings.color[2] = b;
     readings.color[3] = c;
   }
+  readings.proximity = apds9960.readProximity();
 
   readings.mic = micMax - micMin;
   micMin = INT16_MAX;  // so the next sample becomes both the min and the max
@@ -329,6 +334,7 @@ void checkSensors() {
   bool apdsFound = apds9960.begin();
   if (apdsFound) {
     apds9960.enableColor(true);
+    apds9960.enableProximity(true);
   }
   reportSensor("APDS9960 ", apdsFound);
 
@@ -398,6 +404,7 @@ void setupBle() {
   beginNotifyChar(pressureChar, sizeof(readings.pressure));
   beginNotifyChar(humidityChar, sizeof(readings.humidity));
   beginNotifyChar(colorChar, sizeof(readings.color));
+  beginNotifyChar(proximityChar, sizeof(readings.proximity));
   beginNotifyChar(micChar, sizeof(readings.mic));
   beginNotifyChar(buttonsChar, sizeof(readings.buttons));
   beginNotifyChar(magFitChar, sizeof(readings.magFit));

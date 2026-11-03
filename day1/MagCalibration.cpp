@@ -6,27 +6,38 @@
 const float MIN_SPACING = 5;  // microtesla
 const int MIN_POINTS = 50;
 
-// Earth's field is 25 to 65 microtesla. A fit outside this range means the readings
-// have not covered enough of the sphere yet, or something magnetic is swamping the chip.
+// Earth's field is 25 to 65 microtesla. A fit outside this range means something
+// magnetic is swamping the chip.
 const float MIN_RADIUS = 20;
 const float MAX_RADIUS = 100;
 
-void MagCalibration::add(float x, float y, float z) {
-  float dx = x - last[0], dy = y - last[1], dz = z - last[2];
+// An octant only counts when down is clearly inside it: every component of the gravity
+// direction at least this fraction of the whole, so the board is tipped on a corner.
+const float MIN_TILT = 0.3;
+
+void MagCalibration::add(const float mag[3], const float accel[3]) {
+  // Which octant is down in? Only trust the accelerometer when it is reading close to
+  // one g, meaning the board is turning gently rather than being shaken.
+  float g = sqrt(accel[0] * accel[0] + accel[1] * accel[1] + accel[2] * accel[2]);
+  if (g > 8 && g < 12 && fabs(accel[0]) > MIN_TILT * g && fabs(accel[1]) > MIN_TILT * g && fabs(accel[2]) > MIN_TILT * g) {
+    octantSeen[(accel[0] > 0) | (accel[1] > 0) << 1 | (accel[2] > 0) << 2] = true;
+  }
+
+  float dx = mag[0] - last[0], dy = mag[1] - last[1], dz = mag[2] - last[2];
   if (count > 0 && dx * dx + dy * dy + dz * dz < MIN_SPACING * MIN_SPACING) {
     return;
   }
-  last[0] = x;
-  last[1] = y;
-  last[2] = z;
+  for (int i = 0; i < 3; i++) {
+    last[i] = mag[i];
+  }
   count++;
 
   // A point on a sphere with center c and radius r satisfies
   //   2x*cx + 2y*cy + 2z*cz + (r^2 - |c|^2) = x^2 + y^2 + z^2
   // which is linear in the four unknowns cx, cy, cz and d = r^2 - |c|^2. Each reading
   // is one row of A*u = b; we keep the least-squares normal equations (A'A)u = A'b.
-  double row[4] = {2 * x, 2 * y, 2 * z, 1};
-  double b = x * x + y * y + z * z;
+  double row[4] = {2 * mag[0], 2 * mag[1], 2 * mag[2], 1};
+  double b = mag[0] * mag[0] + mag[1] * mag[1] + mag[2] * mag[2];
   for (int i = 0; i < 4; i++) {
     for (int j = 0; j < 4; j++) {
       ata[i][j] += row[i] * row[j];
@@ -35,8 +46,16 @@ void MagCalibration::add(float x, float y, float z) {
   }
 }
 
+int MagCalibration::octantsCovered() const {
+  int covered = 0;
+  for (int i = 0; i < 8; i++) {
+    covered += octantSeen[i];
+  }
+  return covered;
+}
+
 bool MagCalibration::solve() {
-  if (count < MIN_POINTS) {
+  if (count < MIN_POINTS || octantsCovered() < 8) {
     return false;
   }
 
