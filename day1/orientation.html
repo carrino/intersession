@@ -17,17 +17,31 @@
     th { text-align: left; }
     .mag { color: #f0f; }
     .accel { color: #0f0; }
+    #tabs button.active { background: #555; color: #fff; }
+    #paint { position: absolute; bottom: 1em; right: 1em; background: #222; }
+    #paintUi { max-width: 36em; }
     #faces { display: flex; gap: 0.5em; font-family: monospace; }
     .face { width: 9em; padding: 0.4em; border: 1px solid #555; border-radius: 4px; text-align: center; }
     .face span { display: block; min-height: 1.2em; font-size: 0.9em; }
   </style>
 </head>
 <body>
+  <canvas id="paint" width="600" height="600" hidden></canvas>
   <div id="ui">
     <button id="connect">Connect to CLUE</button>
     <span id="status">Not connected</span>
     <label>Back LED <input type="color" id="pixel" value="#000000" disabled></label>
     <button id="recalibrate" hidden>Recalibrate</button>
+    <span id="tabs"><button class="active" data-tab="scene">3D</button><button data-tab="paint">Paint</button></span>
+    <div id="paintUi" hidden>
+      <p>An experiment: the board keeps a position by dead reckoning, integrating its acceleration twice,
+        and each color reading paints a dot at that position. The square is 30 cm. Hold the board still
+        for a moment so it knows its speed is zero, click Reset with it over the corner you want at the
+        center, then move it screen-down an inch over the surface, pausing at the end of each stroke.
+        It drifts within a few seconds, so expect a smear rather than a picture.</p>
+      <button id="resetPaint">Reset position</button>
+      <label><input type="checkbox" id="lights"> Front LEDs</label>
+    </div>
     <div id="calibration" hidden>
       <p>Not calibrated. Hold the board in the air, away from the desk, with each face toward the floor in turn.
         A face goes yellow when it is close, fills green while you hold still, and locks in after a second.
@@ -36,7 +50,7 @@
     </div>
     <table id="data"></table>
     <pre id="log"></pre>
-    <p>The arrows are the accelerometer and magnetometer rotated into the room's frame by the orientation,
+    <p id="sceneHelp">The arrows are the accelerometer and magnetometer rotated into the room's frame by the orientation,
       so they should hold still while the board moves: <span class="accel">down</span> straight at the floor,
       <span class="mag">mag</span> toward magnetic north and down. If they swing with the board, the orientation is off.
       Once the board is calibrated, the mag fit keeps watching for anything the stored offset missed, so its
@@ -59,8 +73,10 @@
     const PIXEL_UUID = 'c10e000d-5a7e-4a6b-9f3e-0b6f2d9a1c01';  // writable: red, green, blue bytes
     const LOG_UUID = 'c10e0010-5a7e-4a6b-9f3e-0b6f2d9a1c01';    // text: every note() and warn() on the board
     const CALIBRATION_UUID = 'c10e0011-5a7e-4a6b-9f3e-0b6f2d9a1c01';  // read/write: accel, gyro and mag offsets, 9 floats
+    const LIGHTS_UUID = 'c10e0013-5a7e-4a6b-9f3e-0b6f2d9a1c01';  // writable: one byte, 1 turns the front white LEDs on
     const CHARACTERISTICS = [
       { uuid: 'c10e0002-5a7e-4a6b-9f3e-0b6f2d9a1c01', fields: [['quaternion', 4, 'w x y z']] },
+      { uuid: 'c10e0012-5a7e-4a6b-9f3e-0b6f2d9a1c01', fields: [['position', 3, 'm NED, dead reckoning']] },
       { uuid: 'c10e0003-5a7e-4a6b-9f3e-0b6f2d9a1c01', fields: [['accel', 3, 'm/s²'], ['gyro', 3, 'rad/s'], ['mag', 3, 'µT'],
                                                                ['accel NED', 3, 'm/s², should be 0 0 -9.8'], ['mag NED', 3, 'µT, should hold still']] },
       { uuid: 'c10e0006-5a7e-4a6b-9f3e-0b6f2d9a1c01', fields: [['temperature', 1, '°C']] },
@@ -143,7 +159,7 @@
     addEventListener('resize', resize);
     resize();
 
-    const VECTORS = new Set(['accel', 'gyro', 'mag', 'accel NED', 'mag NED']);  // rows that get a length column
+    const VECTORS = new Set(['position', 'accel', 'gyro', 'mag', 'accel NED', 'mag NED']);  // rows that get a length column
     const latest = {};  // field name -> most recent values
     const hz = {};      // field name -> packets received per second, for debugging the link
     const counts = {};
@@ -167,6 +183,7 @@
     const status = document.getElementById('status');
     const table = document.getElementById('data');
     const pixelInput = document.getElementById('pixel');
+    const lightsInput = document.getElementById('lights');
 
     // Everything that happens on the Bluetooth side is logged to the browser console
     // (F12), with the time since the page loaded, so a stall can be traced.
@@ -227,6 +244,9 @@
       pixelInput.oninput = () => sendPixel(pixel);
       pixelInput.disabled = false;
 
+      const lights = await service.getCharacteristic(LIGHTS_UUID);
+      lightsInput.onchange = () => lights.writeValue(new Uint8Array([lightsInput.checked ? 1 : 0]));
+
       calibrationChr = await service.getCharacteristic(CALIBRATION_UUID);
       const stored = await calibrationChr.readValue();
       const calibrated = Array.from({ length: 9 }, (_, i) => stored.getFloat32(4 * i, true)).some(v => v !== 0);
@@ -261,6 +281,9 @@
       }
       if (!calibrationPanel.hidden && spec.fields[0][0] === 'accel') {
         calibrate();
+      }
+      if (!paintCanvas.hidden && spec.fields[0][0] === 'color' && latest.position) {
+        paint();
       }
 
       if (latest.quaternion) {
@@ -325,6 +348,44 @@
     // The mag fit's last value is a bit per face the board has pointed at the floor.
     function facesSeen(bits) {
       return ['+x', '-x', '+y', '-y', '+z', '-z'].filter((_, i) => bits & (1 << i)).join(' ') || 'none';
+    }
+
+    // ---- Paint tab ----
+    // The board's dead-reckoned position places each color reading on a 30 cm square.
+    const PAINT_SCALE = 2000;  // pixels per meter: 600 pixels across the square
+    const paintCanvas = document.getElementById('paint');
+    const paintContext = paintCanvas.getContext('2d');
+    let paintOrigin = [0, 0, 0];  // the position that sits at the center of the square
+    let brightest = 1;            // the largest clear-light count seen, which paints white
+
+    for (const button of document.querySelectorAll('#tabs button')) {
+      button.onclick = () => {
+        const paintTab = button.dataset.tab === 'paint';
+        renderer.domElement.style.display = paintTab ? 'none' : 'block';  // three.js sets it inline, so hidden alone would not win
+        paintCanvas.hidden = !paintTab;
+        document.getElementById('paintUi').hidden = !paintTab;
+        document.getElementById('sceneHelp').hidden = paintTab;
+        document.querySelector('#tabs .active').classList.remove('active');
+        button.classList.add('active');
+      };
+    }
+    document.getElementById('resetPaint').onclick = () => {
+      paintOrigin = latest.position || [0, 0, 0];
+      brightest = 1;
+      paintContext.clearRect(0, 0, paintCanvas.width, paintCanvas.height);
+    };
+
+    // One dot per color reading. North is up and east is right; the hue is the color's
+    // and its brightness is the clear count relative to the brightest seen since reset.
+    function paint() {
+      const [north, east] = latest.position.map((v, i) => v - paintOrigin[i]);
+      const [r, g, b, clear] = latest.color;
+      brightest = Math.max(brightest, clear);
+      const scale = 255 / Math.max(r, g, b, 1) * clear / brightest;
+      paintContext.fillStyle = `rgb(${r * scale}, ${g * scale}, ${b * scale})`;
+      paintContext.beginPath();
+      paintContext.arc(paintCanvas.width / 2 + east * PAINT_SCALE, paintCanvas.height / 2 - north * PAINT_SCALE, 8, 0, 2 * Math.PI);
+      paintContext.fill();
     }
 
     // ---- Calibration ----

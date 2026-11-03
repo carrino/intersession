@@ -39,6 +39,10 @@ You should now see **Adafruit CLUE** under Tools > Board > Adafruit nRF52 Boards
    once per board. The Recalibrate button on the page starts over. The holds are in the air
    because most tables have steel in them, which throws the magnetometer off; the set-down
    step only uses the gyro, so the table does not matter there.
+6. The page's **Paint** tab is an experiment in dead reckoning: the board integrates its
+   acceleration into a position, and each color reading paints a dot there. Turn on the
+   front LEDs, click Reset position, and move the board screen-down an inch over something
+   colorful. It drifts within a few seconds, which is the lesson.
 
 ## When something goes wrong
 

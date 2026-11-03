@@ -52,6 +52,13 @@ const int SCREEN_LINES_HZ = 20;  // one line of the screen per tick: 9 lines ref
 const float ACCEL_CORRECTION = 0.005;  // 416 times a second
 const float MAG_CORRECTION = 0.05;     // 10 times a second
 
+// Dead reckoning. The board counts as still when its turning and its acceleration (after
+// gravity) stay below these for this long; then its velocity is known to be zero.
+const float GRAVITY = 9.80665;   // m/s^2
+const float STILL_GYRO = 0.05;   // rad/s
+const float STILL_ACCEL = 0.15;  // m/s^2
+const int STILL_SAMPLES = 100;   // a quarter second at 416 Hz
+
 // The PDM driver's gain register is 0.5 dB per step with 40 as 0 dB. The default of 20
 // (-10 dB) leaves a quiet room below the converter's smallest step, so everything quiet
 // reads as the same hiss; +10 dB lifts it clear while a loud clap still fits.
@@ -78,6 +85,8 @@ BLECharacteristic proximityChar("c10e000e-5a7e-4a6b-9f3e-0b6f2d9a1c01");
 BLECharacteristic statsChar("c10e000f-5a7e-4a6b-9f3e-0b6f2d9a1c01");
 BLECharacteristic logChar("c10e0010-5a7e-4a6b-9f3e-0b6f2d9a1c01");  // text: every note() and warn()
 BLECharacteristic calibrationChar("c10e0011-5a7e-4a6b-9f3e-0b6f2d9a1c01");  // read/write: the Calibration below
+BLECharacteristic positionChar("c10e0012-5a7e-4a6b-9f3e-0b6f2d9a1c01");
+BLECharacteristic lightsChar("c10e0013-5a7e-4a6b-9f3e-0b6f2d9a1c01");  // writable: 1 turns the front white LEDs on
 
 // One-time per-axis offsets for this board's sensors, found by the page's calibration
 // screen (hold each face of the board toward the floor, still, for a second) and kept in
@@ -107,6 +116,7 @@ struct Vectors {
 // The latest reading from every sensor. The screen and BLE both read from here.
 struct Readings {
   float quaternion[4];  // w, x, y, z
+  float position[3];    // m, NED, by dead reckoning from wherever the board was when it started
   Vectors vectors;
   float magFit[5];      // offset x, y, z, field strength (microtesla), faces seen as bits +x -x +y -y +z -z
   float stats[3];       // IMU samples fused per second; degrees between where we think down is and true
@@ -134,6 +144,7 @@ struct Published {
 };
 Published published[] = {
   {quaternionChar, readings.quaternion, sizeof(readings.quaternion)},
+  {positionChar, readings.position, sizeof(readings.position)},
   {vectorsChar, &readings.vectors, sizeof(readings.vectors)},
   {temperatureChar, &readings.temperature, sizeof(readings.temperature)},
   {pressureChar, &readings.pressure, sizeof(readings.pressure)},
@@ -157,6 +168,7 @@ SoftwareTimer stallTimer;
 
 char bleName[16];     // CLUE-xxxx, shown with the connection state on the top line
 bool bleStarted = false;
+bool lightsOn = false;  // the front white LEDs, from the page; button B lights them too
 int readingsTop = 0;  // screen row where the live readings start, below any warnings
 int imuSamples = 0;   // fused since the last stats update
 
@@ -179,6 +191,12 @@ MagCalibration magCalibration;
 // z down through the screen. The world frame is NED: x north, y east, z down. Identity
 // is the board flat, screen up, with button A's edge toward north.
 Quaternion orientation;
+
+// Dead reckoning state: the velocity being integrated and the acceleration the board
+// shows while it is known to be still, which is error to take off the readings.
+float velocity[3];
+float accelBias[3];
+int stillSamples = 0;
 
 // Set by the IMU's data-ready interrupt, cleared when loop() takes the sample.
 // The CPU cycle counter gives a precise timestamp for when the sample was taken.
@@ -229,6 +247,7 @@ void loop() {
   }
   if (every(1000 / QUATERNION_HZ, lastQuaternionMs)) {
     publish(quaternionChar);
+    publish(positionChar);
     handleButtons();
   }
   if (every(1000 / DEBUG_HZ, lastDebugMs)) {
@@ -289,6 +308,7 @@ void readImu() {
   }
 
   updateOrientation(accel, gyro, dt);
+  updatePosition(accel, gyro, dt);
   readings.quaternion[0] = orientation.a;
   readings.quaternion[1] = orientation.b;
   readings.quaternion[2] = orientation.c;
@@ -319,6 +339,38 @@ void updateOrientation(const float accel[3], const float gyro[3], float dt) {
   orientation = correction.fractional(ACCEL_CORRECTION) * orientation;
 
   readings.stats[1] = acos(constrain(down.d, -1, 1)) * 180 / PI;
+}
+
+// Integrates the acceleration left after gravity into a velocity and a position in the
+// world frame. Every error integrates up with it: a 1 degree tilt error lets 0.17 m/s^2
+// of gravity through, which is 8 cm after one second and 34 after two. So whenever the
+// board is held still, its velocity is set back to zero and whatever acceleration is
+// still showing is remembered as bias and taken off from then on. Only once calibrated:
+// before that the gyro's own offset never lets the board look still.
+void updatePosition(const float accel[3], const float gyro[3], float dt) {
+  if (!calibrated()) {
+    return;
+  }
+  float linear[3];
+  toWorldFrame(linear, accel);
+  linear[2] += GRAVITY;  // the push holding the board up is -g on z; what is left is motion
+  for (int i = 0; i < 3; i++) {
+    linear[i] -= accelBias[i];
+  }
+
+  bool still = magnitude(gyro) < STILL_GYRO && magnitude(linear) < STILL_ACCEL;
+  stillSamples = still ? stillSamples + 1 : 0;
+  if (stillSamples >= STILL_SAMPLES) {
+    for (int i = 0; i < 3; i++) {
+      velocity[i] = 0;
+      accelBias[i] += linear[i] * 0.01;  // settles on the leftover in about a quarter second
+    }
+    return;
+  }
+  for (int i = 0; i < 3; i++) {
+    velocity[i] += linear[i] * dt;
+    readings.position[i] += velocity[i] * dt;
+  }
 }
 
 // The accelerometer cannot tell which way is north; the magnetometer can, once its offset
@@ -378,7 +430,7 @@ void readMag() {
   for (int i = 0; i < 3; i++) {
     corrected[i] = mag[i] - magCalibration.offset[i];
   }
-  float strength = sqrt(corrected[0] * corrected[0] + corrected[1] * corrected[1] + corrected[2] * corrected[2]);
+  float strength = magnitude(corrected);
   if (calibrated() && strength > 20 && strength < 70) {  // Earth's field, not a desk or a magnet
     correctNorth(corrected);
   }
@@ -494,7 +546,12 @@ void handleButtons() {
   } else {
     tone(SPEAKER_PIN, 0);
   }
-  digitalWrite(WHITE_LED_PIN, (buttons & 2) ? HIGH : LOW);
+  digitalWrite(WHITE_LED_PIN, ((buttons & 2) || lightsOn) ? HIGH : LOW);
+}
+
+// Runs when the page writes one byte to the lights characteristic: 1 on, 0 off.
+void onLightsWrite(uint16_t connHandle, BLECharacteristic *chr, uint8_t *data, uint16_t len) {
+  lightsOn = data[0] != 0;
 }
 
 // Runs when a phone or web page writes three bytes, red green blue, to the pixel
@@ -700,6 +757,11 @@ void setupBle() {
   calibrationChar.begin();
   calibrationChar.write(&calibration, sizeof(calibration));
 
+  lightsChar.setProperties(CHR_PROPS_READ | CHR_PROPS_WRITE | CHR_PROPS_WRITE_WO_RESP);
+  lightsChar.setFixedLen(1);
+  lightsChar.setWriteCallback(onLightsWrite);
+  lightsChar.begin();
+
   // Our 128-bit UUID nearly fills the advertising packet, so the name goes in the scan
   // response, which scanners ask for right after.
   Bluefruit.Advertising.addFlags(BLE_GAP_ADV_FLAGS_LE_ONLY_GENERAL_DISC_MODE);
@@ -859,6 +921,10 @@ bool every(uint32_t periodMs, uint32_t &lastMs) {
   }
   lastMs = now;
   return true;
+}
+
+float magnitude(const float v[3]) {
+  return sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
 }
 
 void copyVector(float dest[3], const float v[3]) {
