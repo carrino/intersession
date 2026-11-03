@@ -92,6 +92,7 @@ Readings readings;
 // The NeoPixel on the back of the board stays off until something writes a color over BLE.
 uint8_t pixelColor[3] = {0, 0, 0};
 
+char bleName[16];     // CLUE-xxxx, shown with the connection state on the top line
 int readingsTop = 0;  // screen row where the live readings start, below the startup lines
 int imuSamples = 0;   // fused since the last stats update
 
@@ -138,12 +139,13 @@ void setup() {
   pixel.begin();
 
   setupDisplay();
+  display.println();  // the top line is for the BLE name and state
   setupSensors();
   setupMic();
   setupImu();
   setupBle();
   display.setTextWrap(false);
-  readingsTop = display.getCursorY() + 8;  // just below the BLE name and any warnings
+  readingsTop = display.getCursorY() + 8;  // just below the top line and any warnings
 }
 
 void loop() {
@@ -175,6 +177,8 @@ void loop() {
     send(temperatureChar, &readings.temperature, sizeof(readings.temperature));
     send(pressureChar, &readings.pressure, sizeof(readings.pressure));
     send(humidityChar, &readings.humidity, sizeof(readings.humidity));
+    showBleStatus();
+    logConnection();
   }
   if (every(1000 / DISPLAY_LINES_HZ, lastShowMs)) {
     showNextLine();
@@ -449,13 +453,10 @@ void setupBle() {
   Bluefruit.Periph.setConnectCallback(onConnect);
 
   // Give each CLUE its own name so a room full of them is easy to tell apart.
-  char name[16];
   ble_gap_addr_t addr = Bluefruit.getAddr();
-  snprintf(name, sizeof(name), "CLUE-%02X%02X", addr.addr[1], addr.addr[0]);
-  Bluefruit.setName(name);
-  display.setTextColor(ST77XX_WHITE);
-  display.print("BLE: ");
-  display.println(name);
+  snprintf(bleName, sizeof(bleName), "CLUE-%02X%02X", addr.addr[1], addr.addr[0]);
+  Bluefruit.setName(bleName);
+  showBleStatus();
 
   sensorService.begin();  // characteristics join the most recently begun service
   beginNotifyChar(quaternionChar, sizeof(readings.quaternion));
@@ -481,7 +482,26 @@ void setupBle() {
   Bluefruit.Advertising.addService(sensorService);
   Bluefruit.ScanResponse.addName();
   Bluefruit.Advertising.restartOnDisconnect(true);
-  Bluefruit.Advertising.start(0);  // 0 = keep advertising until connected
+  Bluefruit.Advertising.setInterval(32, 32);  // every 20 ms, always, so reconnecting is quick
+  Bluefruit.Advertising.start(0);             // 0 = keep advertising until connected
+}
+
+// Prints the radio settings the laptop or phone agreed to, whenever they change.
+void logConnection() {
+  static uint16_t lastMtu = 0, lastInterval = 0;
+  static uint8_t lastPhy = 0;
+  if (!Bluefruit.connected()) {
+    lastMtu = 0;
+    return;
+  }
+  BLEConnection *conn = Bluefruit.Connection(Bluefruit.connHandle());
+  if (conn->getMtu() != lastMtu || conn->getConnectionInterval() != lastInterval || conn->getPHY() != lastPhy) {
+    lastMtu = conn->getMtu();
+    lastInterval = conn->getConnectionInterval();
+    lastPhy = conn->getPHY();
+    Serial.printf("BLE: MTU %u, interval %.2f ms, %u Mbit PHY, %u byte packets\n", lastMtu, lastInterval * 1.25,
+                  lastPhy == BLE_GAP_PHY_2MBPS ? 2 : 1, conn->getDataLength());
+  }
 }
 
 // A characteristic anyone can read or subscribe to, holding a fixed number of bytes.
@@ -519,6 +539,13 @@ bool send(BLECharacteristic &chr, const void *data, uint16_t len) {
 }
 
 // ---- Screen, laid out like the factory demo ----
+
+void showBleStatus() {
+  display.setTextColor(ST77XX_WHITE, ST77XX_BLACK);
+  display.setCursor(0, 0);
+  display.print(bleName);
+  display.println(Bluefruit.connected() ? " connected" : " waiting  ");
+}
 
 // Drawing the whole screen at once takes long enough to hold up BLE packets and IMU
 // samples, so each call draws just one of the nine lines.

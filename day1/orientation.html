@@ -113,9 +113,14 @@
       showTable();
     });
     setInterval(() => {
+      const summary = [];
       for (const name in counts) {
         hz[name] = counts[name];
+        summary.push(`${name} ${counts[name]}`);
         counts[name] = 0;
+      }
+      if (summary.length) {
+        log('packets/s:', summary.join(', '));
       }
     }, 1000);
 
@@ -124,33 +129,58 @@
     const table = document.getElementById('data');
     const pixelInput = document.getElementById('pixel');
 
+    // Everything that happens on the Bluetooth side is logged to the browser console
+    // (F12), with the time since the page loaded, so a stall can be traced.
+    function log(...args) {
+      console.log(`[${(performance.now() / 1000).toFixed(3)}s]`, ...args);
+    }
+
+    let device = null;
+    addEventListener('beforeunload', () => device?.gatt.disconnect());  // so the board can advertise again right away
+
     async function connect() {
-      const device = await navigator.bluetooth.requestDevice({ filters: [{ services: [SERVICE_UUID] }] });
-      device.addEventListener('gattserverdisconnected', () => status.textContent = 'Disconnected');
+      log('requesting device');
+      device = await navigator.bluetooth.requestDevice({ filters: [{ services: [SERVICE_UUID] }] });
+      log('chose', device.name, device.id);
+      device.addEventListener('gattserverdisconnected', () => {
+        log('disconnected');
+        status.textContent = 'Disconnected';
+      });
 
       const server = await device.gatt.connect();
+      log('connected, discovering service');
       const service = await server.getPrimaryService(SERVICE_UUID);
       for (const spec of CHARACTERISTICS) {
         const characteristic = await service.getCharacteristic(spec.uuid);
         characteristic.addEventListener('characteristicvaluechanged', event => onValue(spec, event.target.value));
         await characteristic.startNotifications();
+        log('subscribed to', spec.fields.map(f => f[0]).join('+'));
       }
 
       const pixel = await service.getCharacteristic(PIXEL_UUID);
       pixelInput.oninput = () => sendPixel(pixel);
       pixelInput.disabled = false;
       status.textContent = `Connected to ${device.name}`;
+      log('ready');
     }
 
-    // Splits a characteristic's bytes into its fields and keeps the latest values.
+    // Splits a characteristic's bytes into its fields and keeps the latest values. A packet
+    // shorter than expected (the BLE MTU was not raised) still yields the fields that fit.
+    const seen = {};  // characteristic uuid -> true once its first packet was logged
     function onValue(spec, data) {
       const expected = spec.fields.reduce((sum, [, count]) => sum + 4 * count, 0);
+      if (!seen[spec.uuid]) {
+        seen[spec.uuid] = true;
+        log('first packet for', spec.fields[0][0], `${data.byteLength} bytes, expected ${expected}`);
+      }
       if (data.byteLength !== 1 && data.byteLength < expected) {
         status.textContent = `${spec.fields[0][0]} packet is ${data.byteLength} bytes, expected ${expected} (BLE MTU too small?)`;
-        return;
       }
       let offset = 0;
       for (const [name, count] of spec.fields) {
+        if (data.byteLength !== 1 && offset + 4 * count > data.byteLength) {
+          break;
+        }
         latest[name] = data.byteLength === 1
           ? [data.getUint8(0)]
           : Array.from({ length: count }, (_, i) => data.getFloat32(offset + 4 * i, true));
@@ -217,7 +247,10 @@
     }
 
     if (navigator.bluetooth) {
-      document.getElementById('connect').onclick = () => connect().catch(err => status.textContent = err.message);
+      document.getElementById('connect').onclick = () => connect().catch(err => {
+        console.error(err);
+        status.textContent = err.message;
+      });
     } else {
       status.textContent = 'Web Bluetooth needs Chrome or Edge';
     }
