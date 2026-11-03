@@ -30,11 +30,14 @@ public:
   int count = 0;  // readings used in the fit
 
 private:
+  void reset();
+  static float distance(const float a[3], const float b[3]);
+
   // Running sums for the least-squares fit, see MagCalibration.cpp.
   double ata[4][4] = {};
   double atb[4] = {};
   float last[3] = {0, 0, 0};
-  bool directionSeen[6] = {};
+  bool faceSeen[6] = {};
 };
 
 #endif
