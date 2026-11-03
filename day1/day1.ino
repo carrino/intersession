@@ -32,6 +32,11 @@ const int DEBUG_HZ = 10;        // accel, gyro, mag, color, proximity, mic
 const int ENVIRONMENT_HZ = 2;   // temperature, pressure, humidity: slow to read and slow to change
 const int DISPLAY_LINES_HZ = 20;  // one line of the screen per tick, so 9 lines refresh every 0.45 s
 
+// Turns the microphone's level relative to full scale into an approximate sound pressure
+// level: the mic puts out -26 dBFS at 94 dB SPL, and the PDM driver's default gain is
+// -10 dB, so SPL is about dBFS + 94 + 26 + 10. Good to a few dB.
+const float MIC_DB_OFFSET = 130;
+
 // How far toward the accelerometer's idea of "down" we move on each update.
 // Small is smooth but slow to fix gyro drift; large is quick but jittery.
 const float ACCEL_CORRECTION = 0.005;
@@ -75,7 +80,7 @@ struct Readings {
   float humidity;       // percent
   float color[4];       // red, green, blue, clear light counts
   float proximity;      // 0 far to 255 near
-  float mic;            // peak-to-peak amplitude
+  float mic;            // approximate dB SPL
   uint8_t buttons;      // bit 0 = A, bit 1 = B
 };
 Readings readings;
@@ -114,8 +119,10 @@ float gyroBias[3] = {0, 0, 0};
 volatile bool sampleReady = false;
 volatile uint32_t sampleCycles = 0;
 
-// Quietest and loudest microphone sample since last checked, kept by the PDM callback.
-volatile int16_t micMin = INT16_MAX, micMax = INT16_MIN;
+// Running sums of the microphone samples since last checked, kept by the PDM callback,
+// for the RMS level. The sum of squares needs 64 bits.
+volatile int64_t micSum = 0, micSumSquares = 0;
+volatile int32_t micCount = 0;
 int16_t micSamples[256];
 
 void setup() {
@@ -276,22 +283,32 @@ void readLightAndMic() {
   }
   readings.proximity = apds9960.readProximity();
 
-  readings.mic = micMax - micMin;
-  micMin = INT16_MAX;  // so the next sample becomes both the min and the max
-  micMax = INT16_MIN;
+  readings.mic = micDecibels();
+}
+
+// The RMS level of the samples since the last call, converted to decibels.
+float micDecibels() {
+  noInterrupts();  // so the PDM callback cannot change the sums while we copy and reset them
+  int64_t sum = micSum, sumSquares = micSumSquares;
+  int32_t count = micCount;
+  micSum = micSumSquares = micCount = 0;
+  interrupts();
+  if (count == 0) {
+    return 0;
+  }
+  float mean = (float)sum / count;
+  float rms = sqrt(max((float)sumSquares / count - mean * mean, 1.0f));  // 1 keeps log10 finite in silence
+  return 20 * log10(rms / 32768) + MIC_DB_OFFSET;
 }
 
 // Called by the PDM library whenever a chunk of microphone samples is ready.
 void onMicData() {
   int count = PDM.read(micSamples, sizeof(micSamples)) / sizeof(micSamples[0]);
   for (int i = 0; i < count; i++) {
-    if (micSamples[i] < micMin) {
-      micMin = micSamples[i];
-    }
-    if (micSamples[i] > micMax) {
-      micMax = micSamples[i];
-    }
+    micSum += micSamples[i];
+    micSumSquares += (int32_t)micSamples[i] * micSamples[i];
   }
+  micCount += count;
 }
 
 // Same as the factory demo: A beeps, B lights the white LEDs.
@@ -493,7 +510,7 @@ void showNextLine() {
     case 5: showVector("Accel:", readings.vectors.accel); break;
     case 6: showVector("Gyro:", readings.vectors.gyro); break;
     case 7: showVector("Mag:", readings.vectors.mag); break;
-    case 8: showValue("Mic: ", readings.mic, 0, ""); break;
+    case 8: showValue("Mic: ", readings.mic, 0, " dB"); break;
   }
   line = (line + 1) % 9;
 }
