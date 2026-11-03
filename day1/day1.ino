@@ -10,7 +10,6 @@
 #include <Adafruit_LSM6DS33.h>
 #include <Adafruit_LSM6DS3TRC.h>
 #include <Adafruit_LIS3MDL.h>
-#include <Adafruit_SHT31.h>
 #include <Adafruit_APDS9960.h>
 #include <Adafruit_BMP280.h>
 #include <PDM.h>
@@ -25,6 +24,7 @@ const int NEOPIXEL_PIN = 18;
 const int SPEAKER_PIN = 46;
 const int WHITE_LED_PIN = 43;
 const int IMU_INTERRUPT_PIN = 45;  // the IMU's INT1 line
+const int SHT30_ADDRESS = 0x44;    // the humidity sensor, on I2C
 
 // How often each group of readings is sent, in packets per second.
 const int QUATERNION_HZ = 30;  // the orientation, the one thing the page needs fast
@@ -97,7 +97,6 @@ Adafruit_LSM6DS33 lsm6ds33;
 Adafruit_LSM6DS3TRC lsm6ds3trc;
 Adafruit_LSM6DS *imu = NULL;
 Adafruit_LIS3MDL lis3mdl;
-Adafruit_SHT31 sht30;
 Adafruit_APDS9960 apds9960;
 Adafruit_BMP280 bmp280;
 MagCalibration magCalibration;
@@ -270,7 +269,24 @@ void lowPass(float smoothed[3], const float latest[3], float fraction) {
 void readEnvironment() {
   readings.temperature = bmp280.readTemperature();
   readings.pressure = bmp280.readPressure() / 100;
-  readings.humidity = sht30.readHumidity();  // blocks for 20 ms, hence the slow rate
+  readHumidity();
+}
+
+// The SHT30 humidity sensor is told at startup to measure on its own once a second, so
+// a read is just fetching its latest result. (The Adafruit library instead starts a
+// measurement and sleeps 20 ms for it, which would stall the loop.)
+void readHumidity() {
+  Wire.beginTransmission(SHT30_ADDRESS);
+  Wire.write(0xE0);  // fetch the latest measurement
+  Wire.write(0x00);
+  if (Wire.endTransmission() != 0 || Wire.requestFrom(SHT30_ADDRESS, 6) != 6) {
+    return;  // the first result is not ready yet; keep the old value
+  }
+  uint8_t data[6];  // temperature, its checksum, humidity, its checksum
+  for (int i = 0; i < 6; i++) {
+    data[i] = Wire.read();
+  }
+  readings.humidity = 100.0 * ((data[3] << 8) | data[4]) / 65535;
 }
 
 void readLightAndMic() {
@@ -361,7 +377,10 @@ void setupSensors() {
   if (!lis3mdl.begin_I2C()) {
     warn("LIS3MDL missing");
   }
-  if (!sht30.begin(0x44)) {
+  Wire.beginTransmission(SHT30_ADDRESS);
+  Wire.write(0x21);  // periodic mode: measure once a second, high repeatability
+  Wire.write(0x30);
+  if (Wire.endTransmission() != 0) {
     warn("SHT30 missing");
   }
   if (!bmp280.begin()) {
