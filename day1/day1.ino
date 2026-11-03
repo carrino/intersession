@@ -63,7 +63,7 @@ BLECharacteristic magFitChar("c10e000c-5a7e-4a6b-9f3e-0b6f2d9a1c01");
 BLECharacteristic pixelChar("c10e000d-5a7e-4a6b-9f3e-0b6f2d9a1c01");  // writable: red, green, blue
 BLECharacteristic proximityChar("c10e000e-5a7e-4a6b-9f3e-0b6f2d9a1c01");
 BLECharacteristic statsChar("c10e000f-5a7e-4a6b-9f3e-0b6f2d9a1c01");
-BLECharacteristic logChar("c10e0010-5a7e-4a6b-9f3e-0b6f2d9a1c01");  // text: what the board has to say
+BLECharacteristic logChar("c10e0010-5a7e-4a6b-9f3e-0b6f2d9a1c01");  // text: every warn() the board prints
 
 // The motion readings, sent together in one packet. The NED pair are the raw readings
 // rotated into the world frame by the orientation and averaged there, where gravity and
@@ -129,6 +129,7 @@ volatile uint32_t loopAliveMs = 0;  // when loop() last checked in
 SoftwareTimer stallTimer;
 
 char bleName[16];     // CLUE-xxxx, shown with the connection state on the top line
+bool bleStarted = false;
 int readingsTop = 0;  // screen row where the live readings start, below any warnings
 int imuSamples = 0;   // fused since the last stats update
 
@@ -181,6 +182,7 @@ void setup() {
   startWatchdog();
   stallTimer.begin(500, onStallCheck);
   stallTimer.start();
+  publish(logChar);  // any warning from setup, for a page that connects later
 }
 
 void loop() {
@@ -450,11 +452,10 @@ void onStallCheck(TimerHandle_t timer) {
     return;
   }
   reported = true;
-  snprintf(logLine, sizeof(logLine), "Stuck in %s, rebooting", STAGE_NAMES[stage]);
-  warn(logLine);
-  Published &log = find(logChar);
-  log.chr.write(log.value, log.len);
-  notify(log);
+  char message[64];
+  snprintf(message, sizeof(message), "Stuck in %s, rebooting", STAGE_NAMES[stage]);
+  warn(message);
+  notify(find(logChar));  // the stuck loop will not flush it, so send it from here
   sd_power_gpregret_clr(1, 0xFF);
   sd_power_gpregret_set(1, stage);
 }
@@ -463,8 +464,9 @@ void onStallCheck(TimerHandle_t timer) {
 // while the retained register can still be read directly.
 void reportLastReset() {
   if (readResetReason() & POWER_RESETREAS_DOG_Msk) {
-    snprintf(logLine, sizeof(logLine), "Rebooted: was stuck in %s", STAGE_NAMES[NRF_POWER->GPREGRET2 % STAGE_COUNT]);
-    warn(logLine);
+    char message[64];
+    snprintf(message, sizeof(message), "Rebooted: was stuck in %s", STAGE_NAMES[NRF_POWER->GPREGRET2 % STAGE_COUNT]);
+    warn(message);
   }
   NRF_POWER->GPREGRET2 = 0;
 }
@@ -564,7 +566,6 @@ void setupBle() {
   for (Published &p : published) {
     beginNotifyChar(p.chr, p.len);
   }
-  publish(logChar);  // anything reportLastReset() had to say, for a page that connects later
 
   pixelChar.setProperties(CHR_PROPS_READ | CHR_PROPS_WRITE | CHR_PROPS_WRITE_WO_RESP);
   pixelChar.setFixedLen(3);
@@ -579,6 +580,7 @@ void setupBle() {
   Bluefruit.Advertising.restartOnDisconnect(true);
   Bluefruit.Advertising.setInterval(32, 32);  // every 20 ms, always, so reconnecting is quick
   Bluefruit.Advertising.start(0);             // 0 = keep advertising until connected
+  bleStarted = true;
 }
 
 // A characteristic anyone can read or subscribe to, holding a fixed number of bytes.
@@ -714,11 +716,18 @@ void copyVector(float dest[3], const float v[3]) {
   dest[2] = v[2];
 }
 
-// Shows a problem on the screen in red and keeps going.
+// Reports a problem everywhere it can be seen, and keeps going: the serial port, the screen
+// in red, and the log characteristic, which the web page prints as DEVICE_ERROR. A warning
+// from before BLE is up is published once BLE starts, so a page that connects later still
+// gets the last one.
 void warn(const char *message) {
   Serial.println(message);
   display.setTextColor(ST77XX_RED);
   display.println(message);
+  strncpy(logLine, message, sizeof(logLine) - 1);
+  if (bleStarted) {
+    publish(logChar);
+  }
 }
 
 void halt(const char *message) {

@@ -45,7 +45,7 @@
     // except buttons which is one byte.
     const SERVICE_UUID = 'c10e0001-5a7e-4a6b-9f3e-0b6f2d9a1c01';
     const PIXEL_UUID = 'c10e000d-5a7e-4a6b-9f3e-0b6f2d9a1c01';  // writable: red, green, blue bytes
-    const LOG_UUID = 'c10e0010-5a7e-4a6b-9f3e-0b6f2d9a1c01';    // text the board wants to tell us
+    const LOG_UUID = 'c10e0010-5a7e-4a6b-9f3e-0b6f2d9a1c01';    // text: every warn() the board prints
     const CHARACTERISTICS = [
       { uuid: 'c10e0002-5a7e-4a6b-9f3e-0b6f2d9a1c01', fields: [['quaternion', 4, 'w x y z']] },
       { uuid: 'c10e0003-5a7e-4a6b-9f3e-0b6f2d9a1c01', fields: [['accel', 3, 'm/s²'], ['gyro', 3, 'rad/s'], ['mag', 3, 'µT'],
@@ -240,11 +240,11 @@
       table.innerHTML = rows.join('');
     }
 
-    // Messages from the board: shown under the table and in the console.
+    // Every warn() on the board arrives here: shown under the table and in the console.
     function showLog(data) {
       const text = new TextDecoder().decode(data).split('\0')[0];
       if (text) {
-        log('board says:', text);
+        console.error('DEVICE_ERROR: ' + text);
         document.getElementById('log').textContent += `${new Date().toLocaleTimeString()}  ${text}\n`;
       }
     }
