@@ -35,10 +35,12 @@
   </div>
 
   <script type="importmap">
-    { "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js" } }
+    { "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+                   "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/" } }
   </script>
   <script type="module">
     import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
     // The CLUE's BLE service and characteristics. Must match day1.ino. Each characteristic
     // holds little-endian floats, split into the fields listed (name, how many floats, unit),
@@ -73,6 +75,22 @@
     camera.up.set(0, 0, -1);
     camera.position.set(0, -4, -2);
     camera.lookAt(0, 0, 0);
+
+    // Drag to turn the view around the room's vertical axis or tilt it, wheel to zoom, so
+    // the picture can be lined up with where you sit relative to the board. The view is
+    // remembered on this computer.
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enablePan = false;
+    try {
+      const saved = localStorage.getItem('view');
+      if (saved) {
+        camera.position.fromArray(JSON.parse(saved));
+        controls.update();
+      }
+      controls.addEventListener('change', () => localStorage.setItem('view', JSON.stringify(camera.position.toArray())));
+    } catch (err) {
+      // no storage here (a private window, say): the view just starts from the default
+    }
 
     scene.add(new THREE.AmbientLight(0xffffff, 0.6));
     const light = new THREE.DirectionalLight(0xffffff, 1.5);
