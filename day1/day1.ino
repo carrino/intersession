@@ -576,6 +576,12 @@ void copyVector(float dest[3], const sensors_vec_t &v) {
   dest[2] = v.z;
 }
 
+void copyVector(float dest[3], const float v[3]) {
+  dest[0] = v[0];
+  dest[1] = v[1];
+  dest[2] = v[2];
+}
+
 // Shows a problem on the screen in red and keeps going.
 void warn(const char *message) {
   Serial.println(message);
