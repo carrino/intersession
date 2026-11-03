@@ -1,12 +1,12 @@
 // Day 1: the CLUE factory demo, plus an orientation fused from the motion
 // sensors and every reading published over Bluetooth LE for orientation.html.
 //
-// Needs the Adafruit nRF52 board package and the Adafruit Arcada library, which pulls in
-// every sensor library as a dependency. See README.md. The Quaternion and MagCalibration
-// files sit next to this sketch and compile with it.
+// Needs the Adafruit nRF52 board package and the libraries listed in README.md.
+// The Quaternion and MagCalibration files sit next to this sketch and compile with it.
 
-#include <Adafruit_Arcada.h>
-#include <Adafruit_SPIFlash.h>
+#include <Adafruit_GFX.h>
+#include <Adafruit_ST7789.h>
+#include <Adafruit_NeoPixel.h>
 #include <Adafruit_LSM6DS33.h>
 #include <Adafruit_LSM6DS3TRC.h>
 #include <Adafruit_LIS3MDL.h>
@@ -18,12 +18,17 @@
 #include "Quaternion.h"
 #include "MagCalibration.h"
 
+// CLUE pin numbers.
+const int TFT_CS_PIN = 31, TFT_DC_PIN = 32, TFT_RESET_PIN = 33, TFT_BACKLIGHT_PIN = 34;
+const int BUTTON_A_PIN = 5, BUTTON_B_PIN = 11;  // pressed = LOW
+const int NEOPIXEL_PIN = 18;
+const int SPEAKER_PIN = 46;
 const int WHITE_LED_PIN = 43;
-const int IMU_INTERRUPT_PIN = 45;  // the CLUE wires the IMU's INT1 to P1.06, pin 45 in Arduino
+const int IMU_INTERRUPT_PIN = 45;  // the IMU's INT1 is on P1.06, pin 45 in Arduino
 
 // How often each group of sensors is read and sent, in notifications per second.
 const int MOTION_HZ = 30;       // quaternion, accel, gyro, mag
-const int LIGHT_MIC_HZ = 10;    // color, mic
+const int LIGHT_MIC_HZ = 10;    // color, proximity, mic
 const int ENVIRONMENT_HZ = 2;   // temperature, pressure, humidity: slow to read and slow to change
 const int DISPLAY_HZ = 5;
 
@@ -48,7 +53,7 @@ BLECharacteristic magFitChar("c10e000c-5a7e-4a6b-9f3e-0b6f2d9a1c01");
 BLECharacteristic pixelChar("c10e000d-5a7e-4a6b-9f3e-0b6f2d9a1c01");  // writable: red, green, blue bytes
 BLECharacteristic proximityChar("c10e000e-5a7e-4a6b-9f3e-0b6f2d9a1c01");
 
-// We send about 150 notifications a second across all characteristics. The SoftDevice
+// We send about 160 notifications a second across all characteristics. The SoftDevice
 // default queue holds just one, and notify() stalls for up to 100 ms when it is full.
 const int BLE_NOTIFY_QUEUE = 16;
 
@@ -73,8 +78,8 @@ Readings readings;
 uint8_t pixelColor[3];
 bool pixelSetOverBle = false;
 
-Adafruit_Arcada arcada;
-extern Adafruit_SPIFlash Arcada_QSPI_Flash;
+Adafruit_ST7789 display(&SPI1, TFT_CS_PIN, TFT_DC_PIN, TFT_RESET_PIN);
+Adafruit_NeoPixel pixel(1, NEOPIXEL_PIN, NEO_GRB + NEO_KHZ800);
 
 // CLUE boards ship with one of two nearly identical motion chips.
 Adafruit_LSM6DS33 lsm6ds33;
@@ -103,16 +108,16 @@ void setup() {
   Serial.begin(115200);
   dwt_enable();  // start the CPU cycle counter
   pinMode(WHITE_LED_PIN, OUTPUT);
+  pinMode(BUTTON_A_PIN, INPUT_PULLUP);
+  pinMode(BUTTON_B_PIN, INPUT_PULLUP);
+  pixel.begin();
 
   setupDisplay();
-  checkFlash();
   checkSensors();
   setupMic();
   setupImu();
   setupBle();
-
-  arcada.timerCallback(1000, pulseRedLed);
-  arcada.display->setTextWrap(false);
+  display.setTextWrap(false);
 }
 
 void loop() {
@@ -149,6 +154,7 @@ void loop() {
     showReadings();
     updatePixel();
   }
+  analogWrite(LED_BUILTIN, 255 - millis() % 256);  // the factory demo's red LED pulse
 }
 
 // ---- Motion sensors and orientation ----
@@ -253,27 +259,27 @@ void onMicData() {
 
 // Same as the factory demo: A beeps, B lights the white LEDs.
 void handleButtons() {
-  uint8_t buttons = arcada.readButtons() & (ARCADA_BUTTONMASK_A | ARCADA_BUTTONMASK_B);
+  uint8_t buttons = (digitalRead(BUTTON_A_PIN) == LOW ? 1 : 0) | (digitalRead(BUTTON_B_PIN) == LOW ? 2 : 0);
   if (buttons != readings.buttons) {
     readings.buttons = buttons;
     buttonsChar.notify8(buttons);
   }
 
-  if (buttons & ARCADA_BUTTONMASK_A) {
-    tone(ARCADA_AUDIO_OUT, 4000, 100);
+  if (buttons & 1) {
+    tone(SPEAKER_PIN, 4000, 100);
   } else {
-    tone(ARCADA_AUDIO_OUT, 0);
+    tone(SPEAKER_PIN, 0);
   }
-  digitalWrite(WHITE_LED_PIN, buttons & ARCADA_BUTTONMASK_B);
+  digitalWrite(WHITE_LED_PIN, buttons & 2);
 }
 
 void updatePixel() {
   static uint16_t hue = 0;
   hue += 1280;
-  uint32_t color = pixelSetOverBle ? arcada.pixels.Color(pixelColor[0], pixelColor[1], pixelColor[2])
-                                   : arcada.pixels.ColorHSV(hue);
-  arcada.pixels.fill(color);
-  arcada.pixels.show();
+  uint32_t color = pixelSetOverBle ? pixel.Color(pixelColor[0], pixelColor[1], pixelColor[2])
+                                   : pixel.ColorHSV(hue);
+  pixel.fill(color);
+  pixel.show();
 }
 
 void setPixel(uint8_t red, uint8_t green, uint8_t blue) {
@@ -290,46 +296,22 @@ void onPixelWrite(uint16_t connHandle, BLECharacteristic *chr, uint8_t *data, ui
   setPixel(data[0], data[1], data[2]);
 }
 
-void pulseRedLed() {
-  static uint8_t brightness = 0;
-  analogWrite(LED_BUILTIN, brightness--);
-}
-
 // ---- Setup ----
 
 void setupDisplay() {
-  if (!arcada.arcadaBegin()) {
-    halt("Arcada failed");
-  }
-  arcada.displayBegin();
-  arcada.setBacklight(255);
-  arcada.display->setCursor(0, 0);
-  arcada.display->setTextWrap(true);
-  arcada.display->setTextSize(2);
-}
-
-void checkFlash() {
-  if (Arcada_QSPI_Flash.begin()) {
-    arcada.display->setTextColor(ARCADA_GREEN);
-    arcada.display->print("QSPI JEDEC: 0x");
-    arcada.display->println(Arcada_QSPI_Flash.getJEDECID(), HEX);
-  } else {
-    arcada.display->setTextColor(ARCADA_RED);
-    arcada.display->println("QSPI Flash FAIL");
-  }
-
-  if (arcada.filesysBegin()) {
-    arcada.display->setTextColor(ARCADA_GREEN);
-    arcada.display->println("Filesystem OK");
-  } else {
-    arcada.display->setTextColor(ARCADA_YELLOW);
-    arcada.display->println("Filesystem not found");
-  }
+  display.init(240, 240);
+  display.setRotation(1);
+  display.fillScreen(ST77XX_BLACK);
+  pinMode(TFT_BACKLIGHT_PIN, OUTPUT);
+  digitalWrite(TFT_BACKLIGHT_PIN, HIGH);
+  display.setCursor(0, 0);
+  display.setTextWrap(true);
+  display.setTextSize(2);
 }
 
 void checkSensors() {
-  arcada.display->setTextColor(ARCADA_WHITE);
-  arcada.display->println("Sensors Found: ");
+  display.setTextColor(ST77XX_WHITE);
+  display.println("Sensors Found: ");
 
   bool apdsFound = apds9960.begin();
   if (apdsFound) {
@@ -344,21 +326,22 @@ void checkSensors() {
     imu = &lsm6ds3trc;
   }
   reportSensor("LSM6DS3x ", imu != NULL);
-  arcada.display->println();
+  display.println();
 
   reportSensor("LIS3MDL ", lis3mdl.begin_I2C());
   reportSensor("SHT30 ", sht30.begin(0x44));
   reportSensor("BMP280", bmp280.begin());
-  arcada.display->println();
+  display.println();
 
   Wire.setClock(400000);  // every chip supports fast mode I2C; their begin() calls left it at 100 kHz
 }
 
 // Prints a sensor's name on the startup screen: green if it answered, red if not.
 void reportSensor(const char *name, bool found) {
-  Serial.printf("%s%s\n", name, found ? "OK" : "not found");
-  arcada.display->setTextColor(found ? ARCADA_GREEN : ARCADA_RED);
-  arcada.display->print(name);
+  Serial.print(name);
+  Serial.println(found ? "OK" : "not found");
+  display.setTextColor(found ? ST77XX_GREEN : ST77XX_RED);
+  display.print(name);
 }
 
 void setupMic() {
@@ -391,9 +374,9 @@ void setupBle() {
   ble_gap_addr_t addr = Bluefruit.getAddr();
   snprintf(name, sizeof(name), "CLUE-%02X%02X", addr.addr[1], addr.addr[0]);
   Bluefruit.setName(name);
-  arcada.display->setTextColor(ARCADA_WHITE);
-  arcada.display->print("BLE: ");
-  arcada.display->println(name);
+  display.setTextColor(ST77XX_WHITE);
+  display.print("BLE: ");
+  display.println(name);
 
   sensorService.begin();  // characteristics join the most recently begun service
   beginNotifyChar(quaternionChar, sizeof(readings.quaternion));
@@ -441,8 +424,8 @@ void onConnect(uint16_t connHandle) {
 // ---- Screen, laid out like the factory demo ----
 
 void showReadings() {
-  arcada.display->setTextColor(ARCADA_WHITE, ARCADA_BLACK);
-  arcada.display->setCursor(0, 100);
+  display.setTextColor(ST77XX_WHITE, ST77XX_BLACK);
+  display.setCursor(0, 100);
   showValue("Temp: ", readings.temperature, 2, " C");
   showValue("Baro: ", readings.pressure, 2, " hPa");
   showValue("Humid: ", readings.humidity, 2, " %");
@@ -455,20 +438,20 @@ void showReadings() {
 
 // Trailing spaces on each line erase leftovers from a previous longer value.
 void showValue(const char *label, float value, int decimals, const char *unit) {
-  arcada.display->print(label);
-  arcada.display->print(value, decimals);
-  arcada.display->print(unit);
-  arcada.display->println("         ");
+  display.print(label);
+  display.print(value, decimals);
+  display.print(unit);
+  display.println("         ");
 }
 
 void showVector(const char *label, const float v[3]) {
-  arcada.display->print(label);
-  arcada.display->print(v[0], 1);
-  arcada.display->print(",");
-  arcada.display->print(v[1], 1);
-  arcada.display->print(",");
-  arcada.display->print(v[2], 1);
-  arcada.display->println("         ");
+  display.print(label);
+  display.print(v[0], 1);
+  display.print(",");
+  display.print(v[1], 1);
+  display.print(",");
+  display.print(v[2], 1);
+  display.println("         ");
 }
 
 // ---- Small helpers ----
@@ -491,8 +474,8 @@ void copyVector(float dest[3], const sensors_vec_t &v) {
 
 void halt(const char *message) {
   Serial.println(message);
-  arcada.display->setTextColor(ARCADA_RED);
-  arcada.display->println(message);
+  display.setTextColor(ST77XX_RED);
+  display.println(message);
   while (true) {
   }
 }
