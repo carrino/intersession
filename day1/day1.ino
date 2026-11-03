@@ -15,6 +15,8 @@
 #include <PDM.h>
 #include <Wire.h>
 #include <bluefruit.h>
+#include <Adafruit_LittleFS.h>
+#include <InternalFileSystem.h>
 #include "Quaternion.h"
 #include "MagCalibration.h"
 
@@ -75,6 +77,20 @@ BLECharacteristic pixelChar("c10e000d-5a7e-4a6b-9f3e-0b6f2d9a1c01");  // writabl
 BLECharacteristic proximityChar("c10e000e-5a7e-4a6b-9f3e-0b6f2d9a1c01");
 BLECharacteristic statsChar("c10e000f-5a7e-4a6b-9f3e-0b6f2d9a1c01");
 BLECharacteristic logChar("c10e0010-5a7e-4a6b-9f3e-0b6f2d9a1c01");  // text: every note() and warn()
+BLECharacteristic calibrationChar("c10e0011-5a7e-4a6b-9f3e-0b6f2d9a1c01");  // read/write: the Calibration below
+
+// One-time per-axis offsets for this board's sensors, found by the page's calibration
+// screen (hold each face of the board toward the floor, still, for a second) and kept in
+// the board's flash. Each reading becomes raw - offset. An unwritten board has all zeros,
+// which means "not calibrated": then the readings are used raw, the sphere fit and the
+// north correction stay off, and the page offers the calibration screen.
+struct Calibration {
+  float accelOffset[3];
+  float gyroOffset[3];
+  float magOffset[3];
+};
+Calibration calibration;
+const char *CALIBRATION_FILE = "/calibration.bin";
 
 // The motion readings, sent together in one packet. The NED pair are the raw readings
 // rotated into the world frame by the orientation and averaged there, where gravity and
@@ -184,6 +200,7 @@ void setup() {
 
   setupDisplay();
   reportLastReset();
+  loadCalibration();
   unstickI2cBus();
   setupSensors();
   setupMic();
@@ -193,7 +210,7 @@ void setup() {
   startWatchdog();
   stallTimer.begin(500, onStallCheck);
   stallTimer.start();
-  note("Started");
+  note(calibrated() ? "Started, calibrated" : "Started, not calibrated: open the page to calibrate");
 }
 
 void loop() {
@@ -264,6 +281,12 @@ void readImu() {
   imu->getEvent(&accelEvent, &gyroEvent, &tempEvent);
   float *accel = accelEvent.acceleration.v;
   float *gyro = gyroEvent.gyro.v;
+  if (calibrated()) {
+    for (int i = 0; i < 3; i++) {
+      accel[i] -= calibration.accelOffset[i];
+      gyro[i] -= calibration.gyroOffset[i];
+    }
+  }
 
   updateOrientation(accel, gyro, dt);
   readings.quaternion[0] = orientation.a;
@@ -338,15 +361,26 @@ void checkSensorsAnswer() {
   }
 }
 
+// Raw until the board is calibrated. After that the stored offset comes off, the sphere
+// fit watches for anything the stored offset missed (its own offset should stay near
+// zero), and the reading steers north.
 void readMag() {
   sensors_event_t magEvent;
   lis3mdl.getEvent(&magEvent);
-  magCalibration.add(magEvent.magnetic.v, readings.vectors.accel);
-  for (int i = 0; i < 3; i++) {
-    readings.vectors.mag[i] = magEvent.magnetic.v[i] - magCalibration.offset[i];
+  float *mag = magEvent.magnetic.v;
+  if (calibrated()) {
+    for (int i = 0; i < 3; i++) {
+      mag[i] -= calibration.magOffset[i];
+    }
+    magCalibration.add(mag, readings.vectors.accel);
   }
-  if (magCalibration.isEarthField(magEvent.magnetic.v)) {
-    correctNorth(readings.vectors.mag);
+  float *corrected = readings.vectors.mag;
+  for (int i = 0; i < 3; i++) {
+    corrected[i] = mag[i] - magCalibration.offset[i];
+  }
+  float strength = sqrt(corrected[0] * corrected[0] + corrected[1] * corrected[1] + corrected[2] * corrected[2]);
+  if (calibrated() && strength > 20 && strength < 70) {  // Earth's field, not a desk or a magnet
+    correctNorth(corrected);
   }
   float magNed[3];
   toWorldFrame(magNed, readings.vectors.mag);
@@ -468,6 +502,43 @@ void handleButtons() {
 void onPixelWrite(uint16_t connHandle, BLECharacteristic *chr, uint8_t *rgb, uint16_t len) {
   pixel.fill(pixel.Color(rgb[0], rgb[1], rgb[2]));
   pixel.show();
+}
+
+// ---- Calibration, kept in the board's flash ----
+
+bool calibrated() {
+  static const Calibration none = {};
+  return memcmp(&calibration, &none, sizeof(calibration)) != 0;
+}
+
+void loadCalibration() {
+  InternalFS.begin();
+  Adafruit_LittleFS_Namespace::File file(InternalFS);
+  if (file.open(CALIBRATION_FILE, Adafruit_LittleFS_Namespace::FILE_O_READ)) {
+    file.read(&calibration, sizeof(calibration));
+    file.close();
+  }
+}
+
+void saveCalibration() {
+  InternalFS.remove(CALIBRATION_FILE);  // FILE_O_WRITE appends, so start clean
+  Adafruit_LittleFS_Namespace::File file(InternalFS);
+  if (file.open(CALIBRATION_FILE, Adafruit_LittleFS_Namespace::FILE_O_WRITE)) {
+    file.write((const uint8_t *)&calibration, sizeof(calibration));
+    file.close();
+  }
+}
+
+// Runs when the page writes a Calibration. All zeros means "forget it and start over".
+void onCalibrationWrite(uint16_t connHandle, BLECharacteristic *chr, uint8_t *data, uint16_t len) {
+  memcpy(&calibration, data, sizeof(calibration));
+  if (calibrated()) {
+    saveCalibration();
+    note("Calibration saved");
+  } else {
+    InternalFS.remove(CALIBRATION_FILE);
+    note("Calibration cleared");
+  }
 }
 
 // ---- Setup ----
@@ -622,6 +693,12 @@ void setupBle() {
   pixelChar.setFixedLen(3);
   pixelChar.setWriteCallback(onPixelWrite);
   pixelChar.begin();
+
+  calibrationChar.setProperties(CHR_PROPS_READ | CHR_PROPS_WRITE);
+  calibrationChar.setFixedLen(sizeof(calibration));
+  calibrationChar.setWriteCallback(onCalibrationWrite);
+  calibrationChar.begin();
+  calibrationChar.write(&calibration, sizeof(calibration));
 
   // Our 128-bit UUID nearly fills the advertising packet, so the name goes in the scan
   // response, which scanners ask for right after.

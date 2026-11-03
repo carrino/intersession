@@ -17,6 +17,9 @@
     th { text-align: left; }
     .mag { color: #f0f; }
     .accel { color: #0f0; }
+    #faces { display: flex; gap: 0.5em; font-family: monospace; }
+    .face { width: 9em; padding: 0.4em; border: 1px solid #555; border-radius: 4px; text-align: center; }
+    .face span { display: block; min-height: 1.2em; font-size: 0.9em; }
   </style>
 </head>
 <body>
@@ -24,13 +27,19 @@
     <button id="connect">Connect to CLUE</button>
     <span id="status">Not connected</span>
     <label>Back LED <input type="color" id="pixel" value="#000000" disabled></label>
+    <button id="recalibrate" hidden>Recalibrate</button>
+    <div id="calibration" hidden>
+      <p>Not calibrated. Rest the board with each face toward the floor. A face goes yellow when it is close,
+        fills green while the board holds still, and locks in after a second.</p>
+      <div id="faces"></div>
+    </div>
     <table id="data"></table>
     <pre id="log"></pre>
     <p>The arrows are the accelerometer and magnetometer rotated into the room's frame by the orientation,
       so they should hold still while the board moves: <span class="accel">down</span> straight at the floor,
       <span class="mag">mag</span> toward magnetic north and down. If they swing with the board, the orientation is off.
-      Point each of the board's six faces at the floor in turn; once all 6 are covered the mag fit
-      switches on and the offset is removed. The color sensor only sees what is lit: hold button B to turn on the
+      Once the board is calibrated, the mag fit keeps watching for anything the stored offset missed, so its
+      offset should stay near zero. The color sensor only sees what is lit: hold button B to turn on the
       front LEDs while holding something in front of it.</p>
   </div>
 
@@ -48,6 +57,7 @@
     const SERVICE_UUID = 'c10e0001-5a7e-4a6b-9f3e-0b6f2d9a1c01';
     const PIXEL_UUID = 'c10e000d-5a7e-4a6b-9f3e-0b6f2d9a1c01';  // writable: red, green, blue bytes
     const LOG_UUID = 'c10e0010-5a7e-4a6b-9f3e-0b6f2d9a1c01';    // text: every note() and warn() on the board
+    const CALIBRATION_UUID = 'c10e0011-5a7e-4a6b-9f3e-0b6f2d9a1c01';  // read/write: accel, gyro and mag offsets, 9 floats
     const CHARACTERISTICS = [
       { uuid: 'c10e0002-5a7e-4a6b-9f3e-0b6f2d9a1c01', fields: [['quaternion', 4, 'w x y z']] },
       { uuid: 'c10e0003-5a7e-4a6b-9f3e-0b6f2d9a1c01', fields: [['accel', 3, 'm/s²'], ['gyro', 3, 'rad/s'], ['mag', 3, 'µT'],
@@ -215,6 +225,12 @@
       const pixel = await service.getCharacteristic(PIXEL_UUID);
       pixelInput.oninput = () => sendPixel(pixel);
       pixelInput.disabled = false;
+
+      calibrationChr = await service.getCharacteristic(CALIBRATION_UUID);
+      const stored = await calibrationChr.readValue();
+      const calibrated = Array.from({ length: 9 }, (_, i) => stored.getFloat32(4 * i, true)).some(v => v !== 0);
+      log('calibrated:', calibrated);
+      showCalibrationScreen(!calibrated);
       status.textContent = `Connected to ${device.name}`;
       log('ready');
     }
@@ -241,6 +257,9 @@
           : Array.from({ length: count }, (_, i) => data.getFloat32(offset + 4 * i, true));
         offset += 4 * count;
         counts[name] = (counts[name] || 0) + 1;
+      }
+      if (!calibrationPanel.hidden && spec.fields[0][0] === 'accel') {
+        calibrate();
       }
 
       if (latest.quaternion) {
@@ -305,6 +324,129 @@
     // The mag fit's last value is a bit per face the board has pointed at the floor.
     function facesSeen(bits) {
       return ['+x', '-x', '+y', '-y', '+z', '-z'].filter((_, i) => bits & (1 << i)).join(' ') || 'none';
+    }
+
+    // ---- Calibration ----
+    // The board's sensors each read a little off zero. Resting the board on each of its six
+    // faces gives six still readings: the accelerometer's all lie on a sphere of radius g
+    // around its offset, however tilted each hold was, so the sphere's center is the offset,
+    // and the same goes for the mag. The gyro should read zero while still, so its offset is
+    // its average. The nine offsets go to the board, which keeps them in flash.
+    const FACES = [
+      { name: '+x down', axis: [1, 0, 0] }, { name: '-x down', axis: [-1, 0, 0] },
+      { name: '+y down', axis: [0, 1, 0] }, { name: '-y down', axis: [0, -1, 0] },
+      { name: '+z down', axis: [0, 0, 1] }, { name: '-z down', axis: [0, 0, -1] },
+    ];
+    const HOLD_SAMPLES = 10;                 // one second of the 10 Hz motion packets
+    const STILL_GYRO = 0.2;                  // rad/s, below this the board is not turning
+    const POINTING_DOT = Math.cos(15 * Math.PI / 180);  // how close to straight down a face must be
+    const calibrationPanel = document.getElementById('calibration');
+    const recalibrateButton = document.getElementById('recalibrate');
+    const cards = FACES.map(face => {
+      const card = document.createElement('div');
+      card.className = 'face';
+      card.innerHTML = `<b>${face.name}</b><span></span>`;
+      document.getElementById('faces').appendChild(card);
+      return card;
+    });
+    let calibrationChr = null;
+    let held = [];    // per face, the still readings collected so far
+    let locked = [];  // per face, the average reading once a second of them was held
+
+    function showCalibrationScreen(show) {
+      held = FACES.map(() => []);
+      locked = FACES.map(() => null);
+      cards.forEach(card => {
+        card.style.background = '';
+        card.lastChild.textContent = '';
+      });
+      calibrationPanel.hidden = !show;
+      recalibrateButton.hidden = show;
+    }
+
+    // Runs on each motion packet while the calibration screen is up. The accelerometer
+    // reads the push holding the board up, so the face toward the floor reads minus g on
+    // its axis. Moving the board starts that face's second over.
+    function calibrate() {
+      const { accel, gyro, mag } = latest;
+      const g = Math.hypot(...accel);
+      const still = Math.hypot(...gyro) < STILL_GYRO && g > 8.8 && g < 10.8;
+      FACES.forEach((face, i) => {
+        if (locked[i]) {
+          return;
+        }
+        const pointing = dot(face.axis, accel) < -POINTING_DOT * g;
+        held[i] = pointing && still ? [...held[i], { accel, gyro, mag }] : [];
+        if (held[i].length === HOLD_SAMPLES) {
+          locked[i] = { accel: mean(held[i], 'accel'), gyro: mean(held[i], 'gyro'), mag: mean(held[i], 'mag') };
+          cards[i].lastChild.textContent = locked[i].accel.map(v => v.toFixed(2)).join(' ');
+        }
+        const green = 100 * held[i].length / HOLD_SAMPLES;  // the sweep: green from the left as the second fills
+        cards[i].style.background = pointing ? `linear-gradient(90deg, #060 ${green}%, #660 ${green}%)` : '';
+      });
+      if (locked.every(Boolean)) {
+        sendCalibration().catch(err => console.error(err));
+      }
+    }
+
+    async function sendCalibration() {
+      const offsets = [
+        ...sphereCenter(locked.map(l => l.accel)),
+        ...mean(locked, 'gyro'),
+        ...sphereCenter(locked.map(l => l.mag)),
+      ];
+      await writeCalibration(offsets);
+      showCalibrationScreen(false);
+    }
+
+    recalibrateButton.onclick = async () => {
+      await writeCalibration(new Array(9).fill(0));  // all zeros tells the board to forget its offsets
+      showCalibrationScreen(true);
+    };
+
+    async function writeCalibration(offsets) {
+      const data = new DataView(new ArrayBuffer(4 * offsets.length));
+      offsets.forEach((v, i) => data.setFloat32(4 * i, v, true));
+      await calibrationChr.writeValue(data);
+      log('wrote calibration', offsets.map(v => v.toFixed(2)).join(' '));
+    }
+
+    const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+    const mean = (readings, key) => [0, 1, 2].map(axis => readings.reduce((sum, r) => sum + r[key][axis], 0) / readings.length);
+
+    // Least-squares center of the sphere through the points, the same fit as
+    // MagCalibration.cpp: each point is one linear row 2x*cx + 2y*cy + 2z*cz + d = x²+y²+z²
+    // in the unknowns cx, cy, cz, d, solved through the normal equations.
+    function sphereCenter(points) {
+      const m = Array.from({ length: 4 }, () => new Array(5).fill(0));  // [A'A | A'b]
+      for (const [x, y, z] of points) {
+        const row = [2 * x, 2 * y, 2 * z, 1];
+        const b = x * x + y * y + z * z;
+        for (let i = 0; i < 4; i++) {
+          for (let j = 0; j < 4; j++) {
+            m[i][j] += row[i] * row[j];
+          }
+          m[i][4] += row[i] * b;
+        }
+      }
+      for (let col = 0; col < 4; col++) {  // Gauss-Jordan elimination
+        let pivot = col;
+        for (let r = col + 1; r < 4; r++) {
+          if (Math.abs(m[r][col]) > Math.abs(m[pivot][col])) {
+            pivot = r;
+          }
+        }
+        [m[col], m[pivot]] = [m[pivot], m[col]];
+        for (const row of m) {
+          if (row !== m[col]) {
+            const f = row[col] / m[col][col];
+            for (let k = col; k < 5; k++) {
+              row[k] -= f * m[col][k];
+            }
+          }
+        }
+      }
+      return [0, 1, 2].map(i => m[i][4] / m[i][i]);
     }
 
     // Writes the color picker's value to the board as three bytes. The picker fires faster
