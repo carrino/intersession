@@ -1,9 +1,9 @@
 // Day 1: the CLUE factory demo, plus an orientation fused from the motion
 // sensors and every reading published over Bluetooth LE for orientation.html.
 //
-// Libraries (Arduino Library Manager unless noted): Adafruit Arcada, Adafruit LSM6DS,
-//   Adafruit LIS3MDL, Adafruit SHT31, Adafruit APDS9960, Adafruit BMP280, and the
-//   Adafruit nRF52 board package. Quaternion is in this repo under libraries/.
+// Needs the Adafruit nRF52 board package and the Adafruit Arcada library, which pulls in
+// every sensor library as a dependency. See README.md. The Quaternion and MagCalibration
+// files sit next to this sketch and compile with it.
 
 #include <Adafruit_Arcada.h>
 #include <Adafruit_SPIFlash.h>
@@ -14,8 +14,8 @@
 #include <Adafruit_APDS9960.h>
 #include <Adafruit_BMP280.h>
 #include <PDM.h>
-#include <Quaternion.h>
 #include <bluefruit.h>
+#include "Quaternion.h"
 #include "MagCalibration.h"
 
 const int WHITE_LED_PIN = 43;

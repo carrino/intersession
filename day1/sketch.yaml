@@ -1,6 +1,10 @@
-# Build profile for arduino-cli: `arduino-cli compile --profile clue day1`.
-# Pins the board package and every library so each machine builds the same thing.
-# Versions are the latest in the Arduino and Adafruit indexes as of November 2026.
+# Arduino IDE 2 reads default_fqbn and selects the CLUE board when this sketch is opened.
+default_fqbn: adafruit:nrf52:cluenrf52840
+
+# arduino-cli build profile, for checking the build from a terminal:
+#   arduino-cli compile --profile clue day1
+# It pins the board package and every library to the versions below, which are the latest
+# in the Arduino and Adafruit indexes as of November 2026.
 profiles:
   clue:
     fqbn: adafruit:nrf52:cluenrf52840
@@ -8,7 +12,6 @@ profiles:
       - platform: adafruit:nrf52 (1.7.0)
         platform_index_url: https://adafruit.github.io/arduino-board-index/package_adafruit_index.json
     libraries:
-      - dir: ../libraries/Quaternion
       - Adafruit Arcada Library (2.5.10)
       - Adafruit LSM6DS (4.7.4)
       - Adafruit LIS3MDL (1.2.5)

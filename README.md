@@ -1,41 +1,45 @@
 # Intersession electronics class
 
 Code for the Adafruit CLUE board. Each day lives in its own folder with a sketch named
-after the folder (`day1/day1.ino`), which is what the Arduino tools require.
+after the folder, for example `day1/day1.ino`. Open that file in the Arduino IDE and the
+other files in the folder come along with it.
 
 ## One-time setup
 
 1. Install [Arduino IDE 2](https://www.arduino.cc/en/software).
-2. In **File > Preferences**, add this to *Additional boards manager URLs*:
+2. Open **File > Preferences** (Arduino IDE > Settings on a Mac). In *Additional boards
+   manager URLs* paste:
    `https://adafruit.github.io/arduino-board-index/package_adafruit_index.json`
-3. Still in Preferences, set the **Sketchbook location** to this repository folder. That makes
-   the `libraries/` folder here available to every sketch.
-4. In **Tools > Board > Boards Manager**, install **Adafruit nRF52**. It is a big download.
-5. In **Tools > Manage Libraries**, install each of these and click *Install all* when asked
-   about dependencies: `Adafruit Arcada Library`, `Adafruit LSM6DS`, `Adafruit LIS3MDL`,
-   `Adafruit SHT31 Library`, `Adafruit APDS9960 Library`, `Adafruit BMP280 Library`.
+3. Open **Tools > Board > Boards Manager**, search for `Adafruit nRF52`, and click Install.
+   It is a big download; wait for it to finish.
+4. Open **Tools > Manage Libraries**, search for `Adafruit Arcada Library`, and click
+   Install. When it asks about dependencies, choose **Install all**. That brings in every
+   sensor and display library the CLUE needs.
+
+You should now see **Adafruit CLUE** under Tools > Board > Adafruit nRF52 Boards.
 
 ## Every day
 
-1. **Tools > Board > Adafruit nRF52 Boards > Adafruit CLUE**, and pick the CLUE's port.
-2. Open the day's sketch and press Upload.
-3. Open the day's web page (for example `day1/orientation.html`) in Chrome or Edge, since
-   only those have Web Bluetooth, and connect to your board. Its name, `CLUE-xxxx`, is on
-   the board's screen.
+1. Plug in the CLUE. Open the day's sketch, such as `day1/day1.ino`.
+2. Check that Tools > Board says **Adafruit CLUE** and Tools > Port shows the board. The
+   board should be picked for you; the port you may need to choose.
+3. Press Upload. The board's screen comes back with the sensor readings and its Bluetooth
+   name, `CLUE-xxxx`.
+4. Open the day's web page, for example `day1/orientation.html`, in Chrome or Edge. Only
+   those browsers have Web Bluetooth. Click Connect and pick your board's name.
 
-If an upload fails, double-click the CLUE's reset button. The screen goes dark, a
-`CLUEBOOT` drive appears, and the upload will work. Dragging a `.uf2` file onto that drive
-also programs the board without any of the tools above.
+## When something goes wrong
 
-## Command line
+- **Upload fails or no port shows up:** double-click the small reset button on the CLUE.
+  The screen goes dark and a `CLUEBOOT` drive appears. Upload again.
+- **"Adafruit CLUE" is not in the board list:** step 3 of the setup did not finish.
+- **A `.h` file is not found:** step 4 did not finish, or the sketch was opened from a copy
+  of the `.ino` file on its own instead of from its folder.
+- **The web page cannot find the board:** make sure nothing else is connected to it. Only
+  one laptop or phone can be connected at a time.
 
-`arduino-cli` reads the `sketch.yaml` in each day folder, which pins the board package and
-every library version, and installs what is missing on the first build:
+Dragging a `.uf2` file onto the `CLUEBOOT` drive also programs the board without any of the
+tools above, which is a quick way to get a known-good day's firmware onto a board.
 
-```bash
-arduino-cli compile --profile clue day1
-```
-
-```bash
-arduino-cli upload --profile clue -p /dev/cu.usbmodem* day1
-```
+For checking a build from a terminal, each day folder has a `sketch.yaml` that pins every
+version: `arduino-cli compile --profile clue day1`.
