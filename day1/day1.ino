@@ -61,12 +61,16 @@ BLECharacteristic statsChar("c10e000f-5a7e-4a6b-9f3e-0b6f2d9a1c01");  // how the
 // only needs to cover a burst of a few packets in one loop pass.
 const int BLE_NOTIFY_QUEUE = 8;
 
-// The raw motion vectors, low-pass filtered for the screen and the page. They travel
-// together in one BLE packet: 9 floats.
+// The motion vectors for the screen and the page, in one BLE packet: 15 floats. The NED
+// ones are the raw readings rotated into the world frame by the orientation and averaged.
+// If the fusion is right, accelNed sits at (0, 0, -9.8) and magNed holds still as the
+// board turns.
 struct Vectors {
-  float accel[3];       // m/s^2
-  float gyro[3];        // rad/s
-  float mag[3];         // microtesla, with the hard-iron offset removed
+  float accel[3];       // raw, m/s^2
+  float gyro[3];        // raw with the bias removed, rad/s
+  float mag[3];         // raw with the hard-iron offset removed, microtesla
+  float accelNed[3];    // m/s^2
+  float magNed[3];      // microtesla
 };
 
 // The latest reading from every sensor. The screen and BLE both read from here.
@@ -211,27 +215,28 @@ void readImu() {
   readings.quaternion[2] = orientation.c;
   readings.quaternion[3] = orientation.d;
 
-  // Smoothed copies for the page and screen. The smoothed accel is gravity, a fixed
-  // direction in the room, so it has to be carried through the turn before the new
-  // sample is blended in, or it lags behind whenever the board moves.
-  carryThroughTurn(readings.vectors.accel, turn);
-  lowPass(readings.vectors.accel, accel);
-  lowPass(readings.vectors.gyro, gyro);
+  // For the page and screen: the raw readings, and the accel in the world frame where
+  // gravity is a constant, averaged over about the last 50 ms (0.05 per sample at 416 Hz).
+  copyVector(readings.vectors.accel, accel);
+  copyVector(readings.vectors.gyro, gyro);
+  float accelNed[3];
+  toWorldFrame(accelNed, accel);
+  lowPass(readings.vectors.accelNed, accelNed, 0.05);
 }
 
-// Smooths a vector toward the latest reading. At 416 Hz, 0.05 averages about the last 50 ms.
-void lowPass(float filtered[3], const float latest[3]) {
+// Rotates a vector from the board's frame into the world frame using the orientation.
+void toWorldFrame(float dest[3], const float v[3]) {
+  Quaternion world = orientation.rotate(Quaternion(v[0], v[1], v[2]));
+  dest[0] = world.b;
+  dest[1] = world.c;
+  dest[2] = world.d;
+}
+
+// Moves a smoothed vector the given fraction of the way toward the latest reading.
+void lowPass(float filtered[3], const float latest[3], float fraction) {
   for (int i = 0; i < 3; i++) {
-    filtered[i] += (latest[i] - filtered[i]) * 0.05;
+    filtered[i] += (latest[i] - filtered[i]) * fraction;
   }
-}
-
-// A direction fixed in the room, written in the board's frame, turns opposite to the board.
-void carryThroughTurn(float v[3], const Quaternion &turn) {
-  Quaternion turned = turn.conj().rotate(Quaternion(v[0], v[1], v[2]));
-  v[0] = turned.b;
-  v[1] = turned.c;
-  v[2] = turned.d;
 }
 
 // The gyro says how we turned since last time; the accelerometer says which way
@@ -265,6 +270,12 @@ void readMag() {
   for (int i = 0; i < 3; i++) {
     readings.vectors.mag[i] -= magCalibration.offset[i];
   }
+
+  // Earth's field is constant in the world frame; average it there over about half a
+  // second (0.2 per reading at 10 Hz).
+  float magNed[3];
+  toWorldFrame(magNed, readings.vectors.mag);
+  lowPass(readings.vectors.magNed, magNed, 0.2);
 }
 
 // Refit the hard-iron offset from the readings so far. The fit only switches on once

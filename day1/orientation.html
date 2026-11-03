@@ -25,8 +25,9 @@
     <span id="status">Not connected</span>
     <label>Back LED <input type="color" id="pixel" value="#000000" disabled></label>
     <table id="data"></table>
-    <p>Arrows are drawn in the board's frame: <span class="accel">down</span> (from the accelerometer) should
-      point at the floor, <span class="mag">mag</span> should keep pointing the same way in the room as you turn the board.
+    <p>The arrows are the accelerometer and magnetometer rotated into the room's frame by the orientation,
+      so they should hold still while the board moves: <span class="accel">down</span> straight at the floor,
+      <span class="mag">mag</span> toward magnetic north and down. If they swing with the board, the orientation is off.
       Point each of the board's six faces at the floor in turn; once all 6 are covered the mag fit
       switches on and the offset is removed.</p>
   </div>
@@ -44,7 +45,8 @@
     const PIXEL_UUID = 'c10e000d-5a7e-4a6b-9f3e-0b6f2d9a1c01';  // writable: red, green, blue bytes
     const CHARACTERISTICS = [
       { uuid: 'c10e0002-5a7e-4a6b-9f3e-0b6f2d9a1c01', fields: [['quaternion', 4, 'w x y z']] },
-      { uuid: 'c10e0003-5a7e-4a6b-9f3e-0b6f2d9a1c01', fields: [['accel', 3, 'm/s²'], ['gyro', 3, 'rad/s'], ['mag', 3, 'µT']] },
+      { uuid: 'c10e0003-5a7e-4a6b-9f3e-0b6f2d9a1c01', fields: [['accel', 3, 'm/s²'], ['gyro', 3, 'rad/s'], ['mag', 3, 'µT'],
+                                                               ['accel NED', 3, 'm/s², should be 0 0 -9.8'], ['mag NED', 3, 'µT, should hold still']] },
       { uuid: 'c10e0006-5a7e-4a6b-9f3e-0b6f2d9a1c01', fields: [['temperature', 1, '°C']] },
       { uuid: 'c10e0007-5a7e-4a6b-9f3e-0b6f2d9a1c01', fields: [['pressure', 1, 'hPa']] },
       { uuid: 'c10e0008-5a7e-4a6b-9f3e-0b6f2d9a1c01', fields: [['humidity', 1, '%']] },
@@ -77,10 +79,11 @@
     const board = buildBoard();
     scene.add(board);
 
-    // Sensor vectors are measured in the board's frame, so the arrows live on the board.
+    // The arrows show the averaged NED vectors, so they live in the room's frame, not on
+    // the board: if the orientation is right they hold still while the board turns.
     const magArrow = new THREE.ArrowHelper(new THREE.Vector3(0, 1, 0), new THREE.Vector3(), 1.5, 0xff00ff);
     const downArrow = new THREE.ArrowHelper(new THREE.Vector3(0, 0, 1), new THREE.Vector3(), 1.5, 0x00ff00);
-    board.add(magArrow, downArrow);
+    scene.add(magArrow, downArrow);
 
     // A board shaped like the CLUE in its own frame: the USB plug at +y, the screen on the
     // -z face (up when the board lies flat).
@@ -159,12 +162,12 @@
         const [w, x, y, z] = latest.quaternion;
         board.quaternion.set(x, y, z, w);
       }
-      if (latest.mag) {
-        magArrow.setDirection(new THREE.Vector3(...latest.mag).normalize());
+      if (latest['mag NED']) {
+        magArrow.setDirection(new THREE.Vector3(...latest['mag NED']).normalize());
       }
-      if (latest.accel) {
+      if (latest['accel NED']) {
         // The accelerometer reads the push holding the board up, so down is the opposite.
-        downArrow.setDirection(new THREE.Vector3(...latest.accel).normalize().negate());
+        downArrow.setDirection(new THREE.Vector3(...latest['accel NED']).normalize().negate());
       }
     }
 
