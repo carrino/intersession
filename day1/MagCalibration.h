@@ -22,8 +22,8 @@ public:
   // once the readings cover the sphere and the fit looks like Earth's field.
   bool solve();
 
-  int directionsCovered() const;  // 0 to 6
-  int directionsSeen() const;     // as bits: +x, -x, +y, -y, +z, -z
+  int facesCovered() const;  // 0 to 6
+  int facesSeen() const;     // as bits: +x, -x, +y, -y, +z, -z
 
   float offset[3] = {0, 0, 0};
   float radius = 0;

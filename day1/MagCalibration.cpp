@@ -52,7 +52,7 @@ void MagCalibration::add(const float mag[3], const float accel[3]) {
   }
 }
 
-int MagCalibration::directionsCovered() const {
+int MagCalibration::facesCovered() const {
   int covered = 0;
   for (int i = 0; i < 6; i++) {
     covered += directionSeen[i];
@@ -60,7 +60,7 @@ int MagCalibration::directionsCovered() const {
   return covered;
 }
 
-int MagCalibration::directionsSeen() const {
+int MagCalibration::facesSeen() const {
   int bits = 0;
   for (int i = 0; i < 6; i++) {
     bits |= directionSeen[i] << i;
@@ -69,7 +69,7 @@ int MagCalibration::directionsSeen() const {
 }
 
 bool MagCalibration::solve() {
-  if (count < MIN_POINTS || directionsCovered() < 6) {
+  if (count < MIN_POINTS || facesCovered() < 6) {
     return false;
   }
 

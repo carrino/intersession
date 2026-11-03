@@ -24,28 +24,27 @@ const int BUTTON_A_PIN = 5, BUTTON_B_PIN = 11;  // pressed = LOW
 const int NEOPIXEL_PIN = 18;
 const int SPEAKER_PIN = 46;
 const int WHITE_LED_PIN = 43;
-const int IMU_INTERRUPT_PIN = 45;  // the IMU's INT1 is on P1.06, pin 45 in Arduino
+const int IMU_INTERRUPT_PIN = 45;  // the IMU's INT1 line
 
-// How often each group of sensors is read and sent, in packets per second.
-const int QUATERNION_HZ = 30;   // the orientation, the one thing the page needs fast
-const int DEBUG_HZ = 10;        // accel, gyro, mag, color, proximity, mic
-const int ENVIRONMENT_HZ = 2;   // temperature, pressure, humidity: slow to read and slow to change
-const int DISPLAY_LINES_HZ = 20;  // one line of the screen per tick, so 9 lines refresh every 0.45 s
+// How often each group of readings is sent, in packets per second.
+const int QUATERNION_HZ = 30;  // the orientation, the one thing the page needs fast
+const int DEBUG_HZ = 10;       // accel, gyro, mag, color, proximity, mic
+const int SLOW_HZ = 2;         // temperature, pressure, humidity, mag fit, stats
+const int SCREEN_LINES_HZ = 20;  // one line of the screen per tick: 9 lines refresh every 0.45 s
 
-// Turns the microphone's level relative to full scale into an approximate sound pressure
-// level: the mic puts out -26 dBFS at 94 dB SPL, and the PDM driver's default gain is
-// -10 dB, so SPL is about dBFS + 94 + 26 + 10. Good to a few dB.
-const float MIC_DB_OFFSET = 130;
-
-// How far toward the accelerometer's idea of "down" we move on each update.
+// How far toward the accelerometer's idea of "down" we move on each IMU sample.
 // Small is smooth but slow to fix gyro drift; large is quick but jittery.
 const float ACCEL_CORRECTION = 0.005;
 
-// Our own BLE service. Every value is little-endian floats, except buttons and pixel
-// which are bytes. orientation.html lists the same UUIDs.
+// Turns the mic level relative to full scale into an approximate sound pressure level:
+// the mic puts out -26 dBFS at 94 dB SPL and the PDM driver's default gain is -10 dB.
+const float MIC_DB_OFFSET = 130;
+
+// Our BLE service, one characteristic per reading. Values are little-endian floats,
+// except buttons and pixel which are bytes. orientation.html lists the same UUIDs.
 BLEService sensorService("c10e0001-5a7e-4a6b-9f3e-0b6f2d9a1c01");
 BLECharacteristic quaternionChar("c10e0002-5a7e-4a6b-9f3e-0b6f2d9a1c01");
-BLECharacteristic vectorsChar("c10e0003-5a7e-4a6b-9f3e-0b6f2d9a1c01");  // accel, gyro, mag
+BLECharacteristic vectorsChar("c10e0003-5a7e-4a6b-9f3e-0b6f2d9a1c01");
 BLECharacteristic temperatureChar("c10e0006-5a7e-4a6b-9f3e-0b6f2d9a1c01");
 BLECharacteristic pressureChar("c10e0007-5a7e-4a6b-9f3e-0b6f2d9a1c01");
 BLECharacteristic humidityChar("c10e0008-5a7e-4a6b-9f3e-0b6f2d9a1c01");
@@ -53,32 +52,28 @@ BLECharacteristic colorChar("c10e0009-5a7e-4a6b-9f3e-0b6f2d9a1c01");
 BLECharacteristic micChar("c10e000a-5a7e-4a6b-9f3e-0b6f2d9a1c01");
 BLECharacteristic buttonsChar("c10e000b-5a7e-4a6b-9f3e-0b6f2d9a1c01");
 BLECharacteristic magFitChar("c10e000c-5a7e-4a6b-9f3e-0b6f2d9a1c01");
-BLECharacteristic pixelChar("c10e000d-5a7e-4a6b-9f3e-0b6f2d9a1c01");  // writable: red, green, blue bytes
+BLECharacteristic pixelChar("c10e000d-5a7e-4a6b-9f3e-0b6f2d9a1c01");  // writable: red, green, blue
 BLECharacteristic proximityChar("c10e000e-5a7e-4a6b-9f3e-0b6f2d9a1c01");
-BLECharacteristic statsChar("c10e000f-5a7e-4a6b-9f3e-0b6f2d9a1c01");  // how the fusion is doing
+BLECharacteristic statsChar("c10e000f-5a7e-4a6b-9f3e-0b6f2d9a1c01");
 
-// send() drops a packet when the radio queue is full rather than waiting, so the queue
-// only needs to cover a burst of a few packets in one loop pass.
-const int BLE_NOTIFY_QUEUE = 8;
-
-// The motion vectors for the screen and the page, in one BLE packet: 15 floats. The NED
-// ones are the raw readings rotated into the world frame by the orientation and averaged.
-// If the fusion is right, accelNed sits at (0, 0, -9.8) and magNed holds still as the
-// board turns.
+// The motion readings, sent together in one packet. The NED pair are the raw readings
+// rotated into the world frame by the orientation and averaged there, where gravity and
+// Earth's field are constants: a check on the fusion. accelNed should sit at (0, 0, -9.8)
+// and magNed should hold still as the board turns.
 struct Vectors {
-  float accel[3];       // raw, m/s^2
-  float gyro[3];        // raw, rad/s
-  float mag[3];         // raw with the hard-iron offset removed, microtesla
-  float accelNed[3];    // m/s^2
-  float magNed[3];      // microtesla
+  float accel[3];     // m/s^2
+  float gyro[3];      // rad/s
+  float mag[3];       // microtesla, hard-iron offset removed
+  float accelNed[3];  // m/s^2
+  float magNed[3];    // microtesla
 };
 
 // The latest reading from every sensor. The screen and BLE both read from here.
 struct Readings {
   float quaternion[4];  // w, x, y, z
   Vectors vectors;
-  float magFit[5];      // fitted offset x, y, z, sphere radius (microtesla), faces seen as bits +x -x +y -y +z -z
-  float stats[2];       // IMU samples fused per second; angle in degrees between gyro's down and accel's down
+  float magFit[5];      // offset x, y, z, field strength (microtesla), faces seen as bits +x -x +y -y +z -z
+  float stats[2];       // IMU samples fused per second; degrees between where we think down is and true down
   float temperature;    // C
   float pressure;       // hPa
   float humidity;       // percent
@@ -89,19 +84,12 @@ struct Readings {
 };
 Readings readings;
 
-// The NeoPixel on the back of the board stays off until something writes a color over BLE.
-uint8_t pixelColor[3] = {0, 0, 0};
-
 char bleName[16];     // CLUE-xxxx, shown with the connection state on the top line
-int readingsTop = 0;  // screen row where the live readings start, below the startup lines
+int readingsTop = 0;  // screen row where the live readings start, below any warnings
 int imuSamples = 0;   // fused since the last stats update
 
 Adafruit_ST7789 display(&SPI1, TFT_CS_PIN, TFT_DC_PIN, TFT_RESET_PIN);
-
-// Text drawn straight to the screen goes out as hundreds of tiny SPI transfers and blocks
-// the loop for tens of milliseconds a line. Each line is drawn into this RAM canvas
-// instead and pushed to the screen as one block, which takes about two.
-GFXcanvas16 lineCanvas(240, 16);  // one line of size-2 text
+GFXcanvas16 lineCanvas(240, 16);  // one line of size-2 text, drawn in RAM then pushed as a block
 Adafruit_NeoPixel pixel(1, NEOPIXEL_PIN, NEO_GRB + NEO_KHZ800);
 
 // CLUE boards ship with one of two nearly identical motion chips.
@@ -114,20 +102,19 @@ Adafruit_APDS9960 apds9960;
 Adafruit_BMP280 bmp280;
 MagCalibration magCalibration;
 
-// Rotation from the board's frame to the world frame. The board's frame is the motion
-// chip's own: y toward the USB plug, z down through the screen, x to the left. The world
-// frame is NED: x north, y east, z down. The identity rotation is the board lying flat,
-// screen up, with the USB plug pointing north. Lying flat the accelerometer reads -g on
-// z, since it measures the push holding the board up, not gravity itself.
+// The rotation that takes a vector in the device's frame to the world frame:
+//   world = orientation.rotate(device)
+// The device's frame is the motion chip's: y toward the USB plug, z down through the
+// screen, x toward button A. The world frame is NED: x north, y east, z down. Identity
+// is the board flat, screen up, USB pointing north.
 Quaternion orientation;
 
-// Set by the IMU's data-ready interrupt, cleared when loop() consumes the sample.
-// The CPU cycle counter gives us a precise timestamp for when the sample was taken.
+// Set by the IMU's data-ready interrupt, cleared when loop() takes the sample.
+// The CPU cycle counter gives a precise timestamp for when the sample was taken.
 volatile bool sampleReady = false;
 volatile uint32_t sampleCycles = 0;
 
-// Running sums of the microphone samples since last checked, kept by the PDM callback,
-// for the RMS level. The sum of squares needs 64 bits.
+// Running sums of the microphone samples since last checked, kept by the PDM callback.
 volatile int64_t micSum = 0, micSumSquares = 0;
 volatile int32_t micCount = 0;
 int16_t micSamples[256];
@@ -141,20 +128,18 @@ void setup() {
   pixel.begin();
 
   setupDisplay();
-  display.println();  // the top line is for the BLE name and state
   setupSensors();
   setupMic();
   setupImu();
   setupBle();
-  display.setTextWrap(false);
-  readingsTop = display.getCursorY() + 8;  // just below the top line and any warnings
+  readingsTop = display.getCursorY() + 8;
 }
 
 void loop() {
-  static uint32_t lastQuaternionMs = 0, lastDebugMs = 0, lastEnvironmentMs = 0, lastShowMs = 0;
+  static uint32_t lastQuaternionMs = 0, lastDebugMs = 0, lastSlowMs = 0, lastScreenMs = 0;
 
   // Data-ready stays high until we read, so also go when it is already high: a sample
-  // that landed before we attached the interrupt never produces a rising edge.
+  // that landed before the interrupt was attached never produces a rising edge.
   if (sampleReady || digitalRead(IMU_INTERRUPT_PIN)) {
     readImu();
   }
@@ -170,22 +155,19 @@ void loop() {
     send(proximityChar, &readings.proximity, sizeof(readings.proximity));
     send(micChar, &readings.mic, sizeof(readings.mic));
   }
-  if (every(1000 / ENVIRONMENT_HZ, lastEnvironmentMs)) {
+  if (every(1000 / SLOW_HZ, lastSlowMs)) {
     readEnvironment();
     fitMag();
     updateStats();
-    send(magFitChar, readings.magFit, sizeof(readings.magFit));
-    send(statsChar, readings.stats, sizeof(readings.stats));
     send(temperatureChar, &readings.temperature, sizeof(readings.temperature));
     send(pressureChar, &readings.pressure, sizeof(readings.pressure));
     send(humidityChar, &readings.humidity, sizeof(readings.humidity));
+    send(magFitChar, readings.magFit, sizeof(readings.magFit));
+    send(statsChar, readings.stats, sizeof(readings.stats));
     showBleStatus();
-    requestFastRadio();
-    logConnection();
   }
-  if (every(1000 / DISPLAY_LINES_HZ, lastShowMs)) {
+  if (every(1000 / SCREEN_LINES_HZ, lastScreenMs)) {
     showNextLine();
-    updatePixel();
     analogWrite(LED_BUILTIN, 255 - millis() % 256);  // the factory demo's red LED pulse
   }
 }
@@ -204,31 +186,71 @@ void readImu() {
   float dt = (float)(sampleCycles - lastSampleCycles) / SystemCoreClock;
   lastSampleCycles = sampleCycles;
 
-  sensors_event_t event[3];  // accel, gyro, temperature
-  imu->getEvent(&event[0], &event[1], &event[2]);
-  float accel[3], gyro[3];
-  copyVector(accel, event[0].acceleration);
-  copyVector(gyro, event[1].gyro);
+  sensors_event_t accelEvent, gyroEvent, tempEvent;
+  imu->getEvent(&accelEvent, &gyroEvent, &tempEvent);
+  float *accel = accelEvent.acceleration.v;
+  float *gyro = gyroEvent.gyro.v;
 
-  // How far the board turned since the last sample. Gyro is in radians per second, so
-  // rate * dt is the rotation.
-  Quaternion turn = Quaternion::from_axis_angle(gyro[0] * dt, gyro[1] * dt, gyro[2] * dt);
-  updateOrientation(turn, accel);
+  updateOrientation(accel, gyro, dt);
   readings.quaternion[0] = orientation.a;
   readings.quaternion[1] = orientation.b;
   readings.quaternion[2] = orientation.c;
   readings.quaternion[3] = orientation.d;
 
-  // For the page and screen: the raw readings, and the accel in the world frame where
-  // gravity is a constant, averaged over about the last 50 ms (0.05 per sample at 416 Hz).
   copyVector(readings.vectors.accel, accel);
   copyVector(readings.vectors.gyro, gyro);
   float accelNed[3];
   toWorldFrame(accelNed, accel);
-  lowPass(readings.vectors.accelNed, accelNed, 0.05);
+  lowPass(readings.vectors.accelNed, accelNed, 0.05);  // about the last 50 ms at 416 Hz
 }
 
-// Rotates a vector from the board's frame into the world frame using the orientation.
+// Multiplying the orientation on the right applies a rotation in the device's frame;
+// multiplying on the left applies one in the world frame.
+void updateOrientation(const float accel[3], const float gyro[3], float dt) {
+  // The gyro measures how the device turned, in the device's frame, in radians per
+  // second. Apply that turn in full.
+  Quaternion turn = Quaternion::from_axis_angle(gyro[0] * dt, gyro[1] * dt, gyro[2] * dt);
+  orientation *= turn;
+  orientation.normalize();
+
+  // The accelerometer feels the push holding the board up, so minus its reading is down
+  // in the device's frame. Rotate that into the world, where down is really (0, 0, 1),
+  // and nudge the orientation a fraction of the way from where we think down is to there.
+  Quaternion measuredDown(-accel[0], -accel[1], -accel[2]);
+  Quaternion down = orientation.rotate(measuredDown.normalize());
+  Quaternion correction = down.rotation_between_vectors(Quaternion(0, 0, 1));
+  orientation = correction.fractional(ACCEL_CORRECTION) * orientation;
+
+  readings.stats[1] = acos(constrain(down.d, -1, 1)) * 180 / PI;
+}
+
+void updateStats() {
+  readings.stats[0] = imuSamples * SLOW_HZ;
+  imuSamples = 0;
+}
+
+void readMag() {
+  sensors_event_t magEvent;
+  lis3mdl.getEvent(&magEvent);
+  magCalibration.add(magEvent.magnetic.v, readings.vectors.accel);
+  for (int i = 0; i < 3; i++) {
+    readings.vectors.mag[i] = magEvent.magnetic.v[i] - magCalibration.offset[i];
+  }
+  float magNed[3];
+  toWorldFrame(magNed, readings.vectors.mag);
+  lowPass(readings.vectors.magNed, magNed, 0.2);  // about the last half second at 10 Hz
+}
+
+// Refit the magnetometer's hard-iron offset. The fit only switches on once every face of
+// the board has been pointed at the floor; until then the offset stays at zero.
+void fitMag() {
+  magCalibration.solve();
+  copyVector(readings.magFit, magCalibration.offset);
+  readings.magFit[3] = magCalibration.radius;
+  readings.magFit[4] = magCalibration.facesSeen();
+}
+
+// Rotates a vector from the device's frame into the world frame.
 void toWorldFrame(float dest[3], const float v[3]) {
   Quaternion world = orientation.rotate(Quaternion(v[0], v[1], v[2]));
   dest[0] = world.b;
@@ -237,60 +259,10 @@ void toWorldFrame(float dest[3], const float v[3]) {
 }
 
 // Moves a smoothed vector the given fraction of the way toward the latest reading.
-void lowPass(float filtered[3], const float latest[3], float fraction) {
+void lowPass(float smoothed[3], const float latest[3], float fraction) {
   for (int i = 0; i < 3; i++) {
-    filtered[i] += (latest[i] - filtered[i]) * fraction;
+    smoothed[i] += (latest[i] - smoothed[i]) * fraction;
   }
-}
-
-// The gyro says how we turned since last time; the accelerometer says which way
-// is down. Apply the turn fully, then nudge the result toward the accelerometer.
-void updateOrientation(const Quaternion &turn, const float accel[3]) {
-  orientation *= turn;
-  orientation.normalize();
-
-  // At rest the accelerometer only feels the push holding the board up, so down is the
-  // opposite of what it reads. In the world frame down is simply +z.
-  Quaternion measuredDown(-accel[0], -accel[1], -accel[2]);
-  measuredDown.normalize();
-  Quaternion expectedDown = orientation.conj().rotate(Quaternion(0, 0, 1));
-
-  // Rotate a fraction of the way from where we think down is to where the accelerometer says it is.
-  Quaternion correction = measuredDown.rotation_between_vectors(expectedDown);
-  orientation *= correction.fractional(ACCEL_CORRECTION);
-  readings.stats[1] = acos(constrain(measuredDown.dot_product(expectedDown), -1, 1)) * 180 / PI;
-}
-
-void updateStats() {
-  readings.stats[0] = imuSamples * ENVIRONMENT_HZ;
-  imuSamples = 0;
-}
-
-void readMag() {
-  sensors_event_t mag;
-  lis3mdl.getEvent(&mag);
-  magCalibration.add(mag.magnetic.v, readings.vectors.accel);
-  copyVector(readings.vectors.mag, mag.magnetic);
-  for (int i = 0; i < 3; i++) {
-    readings.vectors.mag[i] -= magCalibration.offset[i];
-  }
-
-  // Earth's field is constant in the world frame; average it there over about half a
-  // second (0.2 per reading at 10 Hz).
-  float magNed[3];
-  toWorldFrame(magNed, readings.vectors.mag);
-  lowPass(readings.vectors.magNed, magNed, 0.2);
-}
-
-// Refit the hard-iron offset from the readings so far. The fit only switches on once
-// every face of the board has been pointed at the floor.
-void fitMag() {
-  magCalibration.solve();
-  for (int i = 0; i < 3; i++) {
-    readings.magFit[i] = magCalibration.offset[i];
-  }
-  readings.magFit[3] = magCalibration.radius;
-  readings.magFit[4] = magCalibration.directionsSeen();
 }
 
 // ---- The other sensors ----
@@ -298,7 +270,7 @@ void fitMag() {
 void readEnvironment() {
   readings.temperature = bmp280.readTemperature();
   readings.pressure = bmp280.readPressure() / 100;
-  readings.humidity = sht30.readHumidity();
+  readings.humidity = sht30.readHumidity();  // blocks for 20 ms, hence the slow rate
 }
 
 void readLightAndMic() {
@@ -311,13 +283,12 @@ void readLightAndMic() {
     readings.color[3] = c;
   }
   readings.proximity = apds9960.readProximity();
-
   readings.mic = micDecibels();
 }
 
-// The RMS level of the samples since the last call, converted to decibels.
+// The RMS level of the microphone samples since the last call, in decibels.
 float micDecibels() {
-  noInterrupts();  // so the PDM callback cannot change the sums while we copy and reset them
+  noInterrupts();  // so the PDM callback cannot change the sums while we take them
   int64_t sum = micSum, sumSquares = micSumSquares;
   int32_t count = micCount;
   micSum = micSumSquares = micCount = 0;
@@ -347,7 +318,6 @@ void handleButtons() {
     readings.buttons = buttons;
     send(buttonsChar, &buttons, sizeof(buttons));
   }
-
   if (buttons & 1) {
     tone(SPEAKER_PIN, 4000, 100);
   } else {
@@ -356,22 +326,11 @@ void handleButtons() {
   digitalWrite(WHITE_LED_PIN, buttons & 2);
 }
 
-void updatePixel() {
-  pixel.fill(pixel.Color(pixelColor[0], pixelColor[1], pixelColor[2]));
+// Runs when a phone or web page writes three bytes, red green blue, to the pixel
+// characteristic. The fixed length means any other size was already rejected.
+void onPixelWrite(uint16_t connHandle, BLECharacteristic *chr, uint8_t *rgb, uint16_t len) {
+  pixel.fill(pixel.Color(rgb[0], rgb[1], rgb[2]));
   pixel.show();
-}
-
-void setPixel(uint8_t red, uint8_t green, uint8_t blue) {
-  pixelColor[0] = red;
-  pixelColor[1] = green;
-  pixelColor[2] = blue;
-  pixelChar.write(pixelColor, sizeof(pixelColor));  // so reading the characteristic shows the current color
-}
-
-// Runs when a phone or web page writes the pixel characteristic. The fixed length
-// means the SoftDevice already rejected any write that is not exactly three bytes.
-void onPixelWrite(uint16_t connHandle, BLECharacteristic *chr, uint8_t *data, uint16_t len) {
-  setPixel(data[0], data[1], data[2]);
 }
 
 // ---- Setup ----
@@ -382,9 +341,8 @@ void setupDisplay() {
   display.fillScreen(ST77XX_BLACK);
   pinMode(TFT_BACKLIGHT_PIN, OUTPUT);
   digitalWrite(TFT_BACKLIGHT_PIN, HIGH);
-  display.setCursor(0, 0);
-  display.setTextWrap(true);
   display.setTextSize(2);
+  display.setCursor(0, 16);  // the top line is for the BLE name and state
 }
 
 // The sensors are all on the board, so only a problem gets mentioned on the screen.
@@ -432,8 +390,8 @@ void setupImu() {
 }
 
 void setupBle() {
-  // (max MTU, max connection event length in 1.25 ms units, notify queue, write queue)
-  Bluefruit.configPrphConn(247, 100, BLE_NOTIFY_QUEUE, 1);
+  // Max MTU 247 so the 60-byte vectors packet fits, and room to queue 8 notifications.
+  Bluefruit.configPrphConn(247, BLE_GAP_EVENT_LENGTH_DEFAULT, 8, 1);
   Bluefruit.begin();
 
   // Give each CLUE its own name so a room full of them is easy to tell apart.
@@ -456,36 +414,18 @@ void setupBle() {
   beginNotifyChar(statsChar, sizeof(readings.stats));
 
   pixelChar.setProperties(CHR_PROPS_READ | CHR_PROPS_WRITE | CHR_PROPS_WRITE_WO_RESP);
-  pixelChar.setFixedLen(sizeof(pixelColor));
+  pixelChar.setFixedLen(3);
   pixelChar.setWriteCallback(onPixelWrite);
   pixelChar.begin();
 
-  // A 128-bit UUID nearly fills the 31-byte advertising packet, leaving only 8 characters
-  // for the name, so the name goes in the scan response, which scanners ask for right after.
+  // Our 128-bit UUID nearly fills the advertising packet, so the name goes in the scan
+  // response, which scanners ask for right after.
   Bluefruit.Advertising.addFlags(BLE_GAP_ADV_FLAGS_LE_ONLY_GENERAL_DISC_MODE);
   Bluefruit.Advertising.addService(sensorService);
   Bluefruit.ScanResponse.addName();
   Bluefruit.Advertising.restartOnDisconnect(true);
   Bluefruit.Advertising.setInterval(32, 32);  // every 20 ms, always, so reconnecting is quick
   Bluefruit.Advertising.start(0);             // 0 = keep advertising until connected
-}
-
-// Prints the radio settings the laptop or phone agreed to, whenever they change.
-void logConnection() {
-  static uint16_t lastMtu = 0, lastInterval = 0;
-  static uint8_t lastPhy = 0;
-  BLEConnection *conn = Bluefruit.Connection(Bluefruit.connHandle());
-  if (!Bluefruit.connected() || conn == NULL) {
-    lastMtu = 0;
-    return;
-  }
-  if (conn->getMtu() != lastMtu || conn->getConnectionInterval() != lastInterval || conn->getPHY() != lastPhy) {
-    lastMtu = conn->getMtu();
-    lastInterval = conn->getConnectionInterval();
-    lastPhy = conn->getPHY();
-    Serial.printf("BLE: MTU %u, interval %.2f ms, %u Mbit PHY, %u byte packets\n", lastMtu, lastInterval * 1.25,
-                  lastPhy == BLE_GAP_PHY_2MBPS ? 2 : 1, conn->getDataLength());
-  }
 }
 
 // A characteristic anyone can read or subscribe to, holding a fixed number of bytes.
@@ -495,28 +435,8 @@ void beginNotifyChar(BLECharacteristic &chr, int bytes) {
   chr.begin();
 }
 
-// Once per connection, half a second in so the laptop or phone has finished its own setup
-// traffic: ask for the 2 Mbit PHY and link-layer packets big enough to carry the vectors
-// packet whole. Each is a request the other side may turn down. The MTU is left to the
-// other side: a request from this end stalled Windows' service discovery until it timed out.
-void requestFastRadio() {
-  static bool requested = false;
-  BLEConnection *conn = Bluefruit.Connection(Bluefruit.connHandle());
-  if (!Bluefruit.connected() || conn == NULL) {
-    requested = false;
-    return;
-  }
-  if (!requested) {
-    requested = true;
-    conn->requestPHY(BLE_GAP_PHY_2MBPS);
-    conn->requestDataLengthUpdate();
-  }
-}
-
-// Sends a characteristic's new value to whoever subscribed to it. Bluefruit's own notify()
-// waits up to 100 ms for room in the radio queue, which would stall this whole loop whenever
-// the laptop is slow to take packets. This version just skips the packet instead; the next
-// one carries a fresher reading anyway.
+// Sends a new value to whoever subscribed. Bluefruit's own notify() waits up to 100 ms
+// when the radio queue is full, which would stall the loop; this drops the packet instead.
 bool send(BLECharacteristic &chr, const void *data, uint16_t len) {
   chr.write(data, len);  // keep the stored value current for anyone who reads instead
   if (!chr.notifyEnabled()) {
@@ -532,6 +452,10 @@ bool send(BLECharacteristic &chr, const void *data, uint16_t len) {
 
 // ---- Screen, laid out like the factory demo ----
 
+// Text drawn straight to the screen goes out as hundreds of tiny SPI transfers and blocks
+// the loop for tens of milliseconds a line. Each line is drawn into lineCanvas instead
+// and pushed as one block, which takes about two, and only one line is drawn per tick.
+
 void showBleStatus() {
   startLine();
   lineCanvas.print(bleName);
@@ -539,8 +463,6 @@ void showBleStatus() {
   pushLine(0);
 }
 
-// Drawing the whole screen at once takes long enough to hold up BLE packets and IMU
-// samples, so each call draws just one of the nine lines.
 void showNextLine() {
   static int line = 0;
   startLine();
@@ -595,12 +517,6 @@ bool every(uint32_t periodMs, uint32_t &lastMs) {
   }
   lastMs = now;
   return true;
-}
-
-void copyVector(float dest[3], const sensors_vec_t &v) {
-  dest[0] = v.x;
-  dest[1] = v.y;
-  dest[2] = v.z;
 }
 
 void copyVector(float dest[3], const float v[3]) {
