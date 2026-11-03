@@ -202,12 +202,19 @@ void readImu() {
     gyro[i] -= gyroBias[i];
   }
 
-  updateOrientation(accel, gyro, dt);
+  // How far the board turned since the last sample. Gyro is in radians per second, so
+  // rate * dt is the rotation.
+  Quaternion turn = Quaternion::from_axis_angle(gyro[0] * dt, gyro[1] * dt, gyro[2] * dt);
+  updateOrientation(turn, accel);
   readings.quaternion[0] = orientation.a;
   readings.quaternion[1] = orientation.b;
   readings.quaternion[2] = orientation.c;
   readings.quaternion[3] = orientation.d;
 
+  // Smoothed copies for the page and screen. The smoothed accel is gravity, a fixed
+  // direction in the room, so it has to be carried through the turn before the new
+  // sample is blended in, or it lags behind whenever the board moves.
+  carryThroughTurn(readings.vectors.accel, turn);
   lowPass(readings.vectors.accel, accel);
   lowPass(readings.vectors.gyro, gyro);
 }
@@ -219,11 +226,18 @@ void lowPass(float filtered[3], const float latest[3]) {
   }
 }
 
+// A direction fixed in the room, written in the board's frame, turns opposite to the board.
+void carryThroughTurn(float v[3], const Quaternion &turn) {
+  Quaternion turned = turn.conj().rotate(Quaternion(v[0], v[1], v[2]));
+  v[0] = turned.b;
+  v[1] = turned.c;
+  v[2] = turned.d;
+}
+
 // The gyro says how we turned since last time; the accelerometer says which way
-// is down. Apply the gyro fully, then nudge the result toward the accelerometer.
-void updateOrientation(const float accel[3], const float gyro[3], float dt) {
-  // Gyro is in radians per second, so rate * dt is the rotation since last update.
-  orientation *= Quaternion::from_axis_angle(gyro[0] * dt, gyro[1] * dt, gyro[2] * dt);
+// is down. Apply the turn fully, then nudge the result toward the accelerometer.
+void updateOrientation(const Quaternion &turn, const float accel[3]) {
+  orientation *= turn;
   orientation.normalize();
 
   // At rest the accelerometer only feels the push holding the board up, so down is the
