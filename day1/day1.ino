@@ -178,6 +178,7 @@ void loop() {
     send(pressureChar, &readings.pressure, sizeof(readings.pressure));
     send(humidityChar, &readings.humidity, sizeof(readings.humidity));
     showBleStatus();
+    requestFastRadio();
     logConnection();
   }
   if (every(1000 / DISPLAY_LINES_HZ, lastShowMs)) {
@@ -450,7 +451,6 @@ void setupBle() {
   // (max MTU, max connection event length in 1.25 ms units, notify queue, write queue)
   Bluefruit.configPrphConn(247, 100, BLE_NOTIFY_QUEUE, 1);
   Bluefruit.begin();
-  Bluefruit.Periph.setConnectCallback(onConnect);
 
   // Give each CLUE its own name so a room full of them is easy to tell apart.
   ble_gap_addr_t addr = Bluefruit.getAddr();
@@ -490,11 +490,11 @@ void setupBle() {
 void logConnection() {
   static uint16_t lastMtu = 0, lastInterval = 0;
   static uint8_t lastPhy = 0;
-  if (!Bluefruit.connected()) {
+  BLEConnection *conn = Bluefruit.Connection(Bluefruit.connHandle());
+  if (!Bluefruit.connected() || conn == NULL) {
     lastMtu = 0;
     return;
   }
-  BLEConnection *conn = Bluefruit.Connection(Bluefruit.connHandle());
   if (conn->getMtu() != lastMtu || conn->getConnectionInterval() != lastInterval || conn->getPHY() != lastPhy) {
     lastMtu = conn->getMtu();
     lastInterval = conn->getConnectionInterval();
@@ -511,14 +511,22 @@ void beginNotifyChar(BLECharacteristic &chr, int bytes) {
   chr.begin();
 }
 
-// Ask the laptop or phone for the fast BLE 5 radio settings: the 2 Mbit PHY, link-layer
-// packets big enough to carry the vectors packet whole, and an MTU to match. Each one is
-// a request that the other side may turn down. The quaternion fits the default MTU anyway.
-void onConnect(uint16_t connHandle) {
-  BLEConnection *conn = Bluefruit.Connection(connHandle);
-  conn->requestPHY(BLE_GAP_PHY_2MBPS);
-  conn->requestDataLengthUpdate();
-  conn->requestMtuExchange(sizeof(Vectors) + 3);  // +3 for the notification header
+// Once per connection, half a second in so the laptop or phone has finished its own setup
+// traffic: ask for the 2 Mbit PHY and link-layer packets big enough to carry the vectors
+// packet whole. Each is a request the other side may turn down. The MTU is left to the
+// other side: a request from this end stalled Windows' service discovery until it timed out.
+void requestFastRadio() {
+  static bool requested = false;
+  BLEConnection *conn = Bluefruit.Connection(Bluefruit.connHandle());
+  if (!Bluefruit.connected() || conn == NULL) {
+    requested = false;
+    return;
+  }
+  if (!requested) {
+    requested = true;
+    conn->requestPHY(BLE_GAP_PHY_2MBPS);
+    conn->requestDataLengthUpdate();
+  }
 }
 
 // Sends a characteristic's new value to whoever subscribed to it. Bluefruit's own notify()
