@@ -25,6 +25,7 @@
     <span id="status">Not connected</span>
     <label>Back LED <input type="color" id="pixel" value="#000000" disabled></label>
     <table id="data"></table>
+    <pre id="log"></pre>
     <p>The arrows are the accelerometer and magnetometer rotated into the room's frame by the orientation,
       so they should hold still while the board moves: <span class="accel">down</span> straight at the floor,
       <span class="mag">mag</span> toward magnetic north and down. If they swing with the board, the orientation is off.
@@ -44,6 +45,7 @@
     // except buttons which is one byte.
     const SERVICE_UUID = 'c10e0001-5a7e-4a6b-9f3e-0b6f2d9a1c01';
     const PIXEL_UUID = 'c10e000d-5a7e-4a6b-9f3e-0b6f2d9a1c01';  // writable: red, green, blue bytes
+    const LOG_UUID = 'c10e0010-5a7e-4a6b-9f3e-0b6f2d9a1c01';    // text the board wants to tell us
     const CHARACTERISTICS = [
       { uuid: 'c10e0002-5a7e-4a6b-9f3e-0b6f2d9a1c01', fields: [['quaternion', 4, 'w x y z']] },
       { uuid: 'c10e0003-5a7e-4a6b-9f3e-0b6f2d9a1c01', fields: [['accel', 3, 'm/s²'], ['gyro', 3, 'rad/s'], ['mag', 3, 'µT'],
@@ -56,7 +58,7 @@
       { uuid: 'c10e000a-5a7e-4a6b-9f3e-0b6f2d9a1c01', fields: [['mic', 1, 'dB SPL, approx']] },
       { uuid: 'c10e000b-5a7e-4a6b-9f3e-0b6f2d9a1c01', fields: [['buttons', 1, 'A=1 B=2']] },
       { uuid: 'c10e000c-5a7e-4a6b-9f3e-0b6f2d9a1c01', fields: [['mag fit', 5, 'offset x y z, radius µT, faces seen']] },
-      { uuid: 'c10e000f-5a7e-4a6b-9f3e-0b6f2d9a1c01', fields: [['stats', 2, 'IMU samples/s, tilt error °']] },
+      { uuid: 'c10e000f-5a7e-4a6b-9f3e-0b6f2d9a1c01', fields: [['stats', 3, 'IMU samples/s, tilt error °, missed updates']] },
     ];
 
     // ---- 3D scene ----
@@ -112,6 +114,7 @@
     addEventListener('resize', resize);
     resize();
 
+    const VECTORS = new Set(['accel', 'gyro', 'mag', 'accel NED', 'mag NED']);  // rows that get a length column
     const latest = {};  // field name -> most recent values
     const hz = {};      // field name -> packets received per second, for debugging the link
     const counts = {};
@@ -164,6 +167,11 @@
         log('subscribed to', spec.fields.map(f => f[0]).join('+'));
       }
 
+      const logChr = await service.getCharacteristic(LOG_UUID);
+      logChr.addEventListener('characteristicvaluechanged', event => showLog(event.target.value));
+      await logChr.startNotifications();
+      showLog(await logChr.readValue());  // anything it said before we connected, such as why it rebooted
+
       const pixel = await service.getCharacteristic(PIXEL_UUID);
       pixelInput.oninput = () => sendPixel(pixel);
       pixelInput.disabled = false;
@@ -214,7 +222,7 @@
       const rows = CHARACTERISTICS.flatMap(spec => spec.fields).map(([name, count, unit]) => {
         const values = latest[name] || [];
         const cells = values.map(v => v.toFixed(2));
-        if (count === 3 && values.length) {
+        if (VECTORS.has(name) && values.length) {
           cells.push(`|v| ${Math.hypot(...values).toFixed(2)}`);
         }
         if (name === 'mag fit' && values.length) {
@@ -230,6 +238,15 @@
         return `<tr><th class="${name}">${name}</th>${cells.map(c => `<td>${c}</td>`).join('')}<td>${unit}</td><td>${rate}</td></tr>`;
       });
       table.innerHTML = rows.join('');
+    }
+
+    // Messages from the board: shown under the table and in the console.
+    function showLog(data) {
+      const text = new TextDecoder().decode(data).split('\0')[0];
+      if (text) {
+        log('board says:', text);
+        document.getElementById('log').textContent += `${new Date().toLocaleTimeString()}  ${text}\n`;
+      }
     }
 
     // The color counts scaled so the strongest channel is full brightness: the hue, not the amount of light.

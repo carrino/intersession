@@ -63,6 +63,7 @@ BLECharacteristic magFitChar("c10e000c-5a7e-4a6b-9f3e-0b6f2d9a1c01");
 BLECharacteristic pixelChar("c10e000d-5a7e-4a6b-9f3e-0b6f2d9a1c01");  // writable: red, green, blue
 BLECharacteristic proximityChar("c10e000e-5a7e-4a6b-9f3e-0b6f2d9a1c01");
 BLECharacteristic statsChar("c10e000f-5a7e-4a6b-9f3e-0b6f2d9a1c01");
+BLECharacteristic logChar("c10e0010-5a7e-4a6b-9f3e-0b6f2d9a1c01");  // text: what the board has to say
 
 // The motion readings, sent together in one packet. The NED pair are the raw readings
 // rotated into the world frame by the orientation and averaged there, where gravity and
@@ -81,7 +82,8 @@ struct Readings {
   float quaternion[4];  // w, x, y, z
   Vectors vectors;
   float magFit[5];      // offset x, y, z, field strength (microtesla), faces seen as bits +x -x +y -y +z -z
-  float stats[2];       // IMU samples fused per second; degrees between where we think down is and true down
+  float stats[3];       // IMU samples fused per second; degrees between where we think down is and true
+                        // down; updates subscribers missed because the radio was busy
   float temperature;    // C
   float pressure;       // hPa
   float humidity;       // percent
@@ -91,6 +93,40 @@ struct Readings {
   uint8_t buttons;      // bit 0 = A, bit 1 = B
 };
 Readings readings;
+char logLine[64];
+
+// Our BLE "database". Each value lives in its characteristic, where anyone can read it.
+// publish() marks a value changed and flushPublished() sends it to subscribers once the
+// radio has room, so they always end up with the latest value. When values change faster
+// than the radio can carry them, subscribers skip ahead and stats counts what they missed.
+struct Published {
+  BLECharacteristic &chr;
+  const void *value;
+  uint16_t len;
+  bool changed;
+};
+Published published[] = {
+  {quaternionChar, readings.quaternion, sizeof(readings.quaternion)},
+  {vectorsChar, &readings.vectors, sizeof(readings.vectors)},
+  {temperatureChar, &readings.temperature, sizeof(readings.temperature)},
+  {pressureChar, &readings.pressure, sizeof(readings.pressure)},
+  {humidityChar, &readings.humidity, sizeof(readings.humidity)},
+  {colorChar, readings.color, sizeof(readings.color)},
+  {proximityChar, &readings.proximity, sizeof(readings.proximity)},
+  {micChar, &readings.mic, sizeof(readings.mic)},
+  {buttonsChar, &readings.buttons, sizeof(readings.buttons)},
+  {magFitChar, readings.magFit, sizeof(readings.magFit)},
+  {statsChar, readings.stats, sizeof(readings.stats)},
+  {logChar, logLine, sizeof(logLine)},
+};
+
+// What loop() is doing, so a stall can be reported. The names match the enum order.
+enum Stage { STAGE_NONE, STAGE_BLE, STAGE_IMU, STAGE_MAG, STAGE_LIGHT_MIC, STAGE_ENVIRONMENT, STAGE_SCREEN, STAGE_COUNT };
+const char *STAGE_NAMES[STAGE_COUNT] = {"nothing", "BLE", "the IMU", "the magnetometer", "the light sensor or mic",
+                                        "the environment sensors", "the screen"};
+volatile Stage stage = STAGE_NONE;
+volatile uint32_t loopAliveMs = 0;  // when loop() last checked in
+SoftwareTimer stallTimer;
 
 char bleName[16];     // CLUE-xxxx, shown with the connection state on the top line
 int readingsTop = 0;  // screen row where the live readings start, below any warnings
@@ -135,6 +171,7 @@ void setup() {
   pixel.begin();
 
   setupDisplay();
+  reportLastReset();
   unstickI2cBus();
   setupSensors();
   setupMic();
@@ -142,42 +179,53 @@ void setup() {
   setupBle();
   readingsTop = display.getCursorY() + 8;
   startWatchdog();
+  stallTimer.begin(500, onStallCheck);
+  stallTimer.start();
 }
 
 void loop() {
   static uint32_t lastQuaternionMs = 0, lastDebugMs = 0, lastSlowMs = 0, lastScreenMs = 0;
   NRF_WDT->RR[0] = WDT_RR_RR_Reload;  // tell the watchdog we are still running
+  loopAliveMs = millis();            // and the stall timer
+
+  stage = STAGE_BLE;
+  flushPublished();
 
   // Data-ready stays high until we read, so also go when it is already high: a sample
   // that landed before the interrupt was attached never produces a rising edge.
+  stage = STAGE_IMU;
   if (sampleReady || digitalRead(IMU_INTERRUPT_PIN)) {
     readImu();
   }
   if (every(1000 / QUATERNION_HZ, lastQuaternionMs)) {
-    send(quaternionChar, readings.quaternion, sizeof(readings.quaternion));
+    publish(quaternionChar);
     handleButtons();
   }
   if (every(1000 / DEBUG_HZ, lastDebugMs)) {
+    stage = STAGE_MAG;
     readMag();
+    stage = STAGE_LIGHT_MIC;
     readLightAndMic();
-    send(vectorsChar, &readings.vectors, sizeof(readings.vectors));
-    send(colorChar, readings.color, sizeof(readings.color));
-    send(proximityChar, &readings.proximity, sizeof(readings.proximity));
-    send(micChar, &readings.mic, sizeof(readings.mic));
+    publish(vectorsChar);
+    publish(colorChar);
+    publish(proximityChar);
+    publish(micChar);
   }
   if (every(1000 / SLOW_HZ, lastSlowMs)) {
+    stage = STAGE_ENVIRONMENT;
     readEnvironment();
     fitMag();
     updateStats();
-    send(temperatureChar, &readings.temperature, sizeof(readings.temperature));
-    send(pressureChar, &readings.pressure, sizeof(readings.pressure));
-    send(humidityChar, &readings.humidity, sizeof(readings.humidity));
-    send(magFitChar, readings.magFit, sizeof(readings.magFit));
-    send(statsChar, readings.stats, sizeof(readings.stats));
-    send(buttonsChar, &readings.buttons, sizeof(readings.buttons));  // in case a change was dropped
+    publish(temperatureChar);
+    publish(pressureChar);
+    publish(humidityChar);
+    publish(magFitChar);
+    publish(statsChar);
+    stage = STAGE_SCREEN;
     showBleStatus();
   }
   if (every(1000 / SCREEN_LINES_HZ, lastScreenMs)) {
+    stage = STAGE_SCREEN;
     showNextLine();
     analogWrite(LED_BUILTIN, 255 - millis() % 256);  // the factory demo's red LED pulse
   }
@@ -363,7 +411,7 @@ void handleButtons() {
   uint8_t buttons = (digitalRead(BUTTON_A_PIN) == LOW ? 1 : 0) | (digitalRead(BUTTON_B_PIN) == LOW ? 2 : 0);
   if (buttons != readings.buttons) {
     readings.buttons = buttons;
-    send(buttonsChar, &buttons, sizeof(buttons));
+    publish(buttonsChar);
   }
   if (buttons & 1) {
     tone(SPEAKER_PIN, 4000, 100);
@@ -390,6 +438,35 @@ void setupDisplay() {
   digitalWrite(TFT_BACKLIGHT_PIN, HIGH);
   display.setTextSize(2);
   display.setCursor(0, 16);  // the top line is for the BLE name and state
+}
+
+// Runs in its own task twice a second. If loop() has not checked in for a second it is
+// stuck, almost certainly in an I2C transfer that will never finish. The radio is still
+// running, so say what it was doing, on the screen and over BLE, and keep that in a
+// register that survives the reset; the watchdog restarts the chip a few seconds later.
+void onStallCheck(TimerHandle_t timer) {
+  static bool reported = false;
+  if (reported || millis() - loopAliveMs < 1000) {
+    return;
+  }
+  reported = true;
+  snprintf(logLine, sizeof(logLine), "Stuck in %s, rebooting", STAGE_NAMES[stage]);
+  warn(logLine);
+  Published &log = find(logChar);
+  log.chr.write(log.value, log.len);
+  notify(log);
+  sd_power_gpregret_clr(1, 0xFF);
+  sd_power_gpregret_set(1, stage);
+}
+
+// After a watchdog reset, say what the loop was stuck in. Runs before the radio starts,
+// while the retained register can still be read directly.
+void reportLastReset() {
+  if (readResetReason() & POWER_RESETREAS_DOG_Msk) {
+    snprintf(logLine, sizeof(logLine), "Rebooted: was stuck in %s", STAGE_NAMES[NRF_POWER->GPREGRET2 % STAGE_COUNT]);
+    warn(logLine);
+  }
+  NRF_POWER->GPREGRET2 = 0;
 }
 
 // A hardware timer that resets the chip if loop() stops reporting in for five seconds, so
@@ -484,17 +561,10 @@ void setupBle() {
   showBleStatus();
 
   sensorService.begin();  // characteristics join the most recently begun service
-  beginNotifyChar(quaternionChar, sizeof(readings.quaternion));
-  beginNotifyChar(vectorsChar, sizeof(readings.vectors));
-  beginNotifyChar(temperatureChar, sizeof(readings.temperature));
-  beginNotifyChar(pressureChar, sizeof(readings.pressure));
-  beginNotifyChar(humidityChar, sizeof(readings.humidity));
-  beginNotifyChar(colorChar, sizeof(readings.color));
-  beginNotifyChar(proximityChar, sizeof(readings.proximity));
-  beginNotifyChar(micChar, sizeof(readings.mic));
-  beginNotifyChar(buttonsChar, sizeof(readings.buttons));
-  beginNotifyChar(magFitChar, sizeof(readings.magFit));
-  beginNotifyChar(statsChar, sizeof(readings.stats));
+  for (Published &p : published) {
+    beginNotifyChar(p.chr, p.len);
+  }
+  publish(logChar);  // anything reportLastReset() had to say, for a page that connects later
 
   pixelChar.setProperties(CHR_PROPS_READ | CHR_PROPS_WRITE | CHR_PROPS_WRITE_WO_RESP);
   pixelChar.setFixedLen(3);
@@ -518,19 +588,55 @@ void beginNotifyChar(BLECharacteristic &chr, int bytes) {
   chr.begin();
 }
 
-// Sends a new value to whoever subscribed. Bluefruit's own notify() waits up to 100 ms
-// when the radio queue is full, which would stall the loop; this drops the packet instead.
-bool send(BLECharacteristic &chr, const void *data, uint16_t len) {
-  chr.write(data, len);  // keep the stored value current for anyone who reads instead
-  if (!chr.notifyEnabled()) {
-    return false;
+Published &find(BLECharacteristic &chr) {
+  for (Published &p : published) {
+    if (&p.chr == &chr) {
+      return p;
+    }
   }
+  halt("publish() of a characteristic that is not in the published table");
+  return published[0];
+}
+
+// Stores a characteristic's current value and marks it changed. If the previous change
+// never reached subscribers, they will skip straight to this one: count that.
+void publish(BLECharacteristic &chr) {
+  Published &p = find(chr);
+  if (p.changed) {
+    readings.stats[2]++;
+  }
+  p.chr.write(p.value, p.len);
+  p.changed = true;
+}
+
+// Sends changed values to subscribers, stopping when the radio queue is full and picking
+// up where it left off on the next loop pass.
+void flushPublished() {
+  for (Published &p : published) {
+    if (!p.changed) {
+      continue;
+    }
+    if (!p.chr.notifyEnabled()) {
+      p.changed = false;  // nobody is listening; the value is still there to be read
+      continue;
+    }
+    if (notify(p) == NRF_ERROR_RESOURCES) {
+      return;
+    }
+    p.changed = false;
+  }
+}
+
+// Hands one value to the radio. Bluefruit's own notify() waits up to 100 ms when the
+// queue is full, which would stall the loop; this returns at once either way.
+uint32_t notify(Published &p) {
   ble_gatts_hvx_params_t hvx = {};
-  hvx.handle = chr.handles().value_handle;
+  uint16_t len = p.len;
+  hvx.handle = p.chr.handles().value_handle;
   hvx.type = BLE_GATT_HVX_NOTIFICATION;
   hvx.p_len = &len;
-  hvx.p_data = (uint8_t *)data;
-  return sd_ble_gatts_hvx(Bluefruit.connHandle(), &hvx) == NRF_SUCCESS;
+  hvx.p_data = (uint8_t *)p.value;
+  return sd_ble_gatts_hvx(Bluefruit.connHandle(), &hvx);
 }
 
 // ---- Screen, laid out like the factory demo ----
