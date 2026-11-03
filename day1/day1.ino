@@ -97,6 +97,11 @@ int readingsTop = 0;  // screen row where the live readings start, below the sta
 int imuSamples = 0;   // fused since the last stats update
 
 Adafruit_ST7789 display(&SPI1, TFT_CS_PIN, TFT_DC_PIN, TFT_RESET_PIN);
+
+// Text drawn straight to the screen goes out as hundreds of tiny SPI transfers and blocks
+// the loop for tens of milliseconds a line. Each line is drawn into this RAM canvas
+// instead and pushed to the screen as one block, which takes about two.
+GFXcanvas16 lineCanvas(240, 16);  // one line of size-2 text
 Adafruit_NeoPixel pixel(1, NEOPIXEL_PIN, NEO_GRB + NEO_KHZ800);
 
 // CLUE boards ship with one of two nearly identical motion chips.
@@ -433,10 +438,12 @@ void setupImu() {
   attachInterrupt(IMU_INTERRUPT_PIN, onImuDataReady, RISING);
 }
 
-// Average half a second of gyro readings while the board sits still after reset.
+// Average a second of gyro readings while the board sits still after reset. The gyro
+// takes 80 ms to settle after its rate is set and its first readings are garbage.
 void measureGyroBias() {
-  const int samples = 200;
+  const int samples = 400;
   sensors_event_t accel, gyro, temp;
+  delay(150);
   for (int n = 0; n < samples; n++) {
     while (!digitalRead(IMU_INTERRUPT_PIN)) {
     }
@@ -549,18 +556,17 @@ bool send(BLECharacteristic &chr, const void *data, uint16_t len) {
 // ---- Screen, laid out like the factory demo ----
 
 void showBleStatus() {
-  display.setTextColor(ST77XX_WHITE, ST77XX_BLACK);
-  display.setCursor(0, 0);
-  display.print(bleName);
-  display.println(Bluefruit.connected() ? " connected" : " waiting  ");
+  startLine();
+  lineCanvas.print(bleName);
+  lineCanvas.print(Bluefruit.connected() ? " connected" : " waiting");
+  pushLine(0);
 }
 
 // Drawing the whole screen at once takes long enough to hold up BLE packets and IMU
 // samples, so each call draws just one of the nine lines.
 void showNextLine() {
   static int line = 0;
-  display.setTextColor(ST77XX_WHITE, ST77XX_BLACK);
-  display.setCursor(0, readingsTop + line * 16);
+  startLine();
   switch (line) {
     case 0: showValue("Temp: ", readings.temperature, 2, " C"); break;
     case 1: showValue("Baro: ", readings.pressure, 2, " hPa"); break;
@@ -572,25 +578,34 @@ void showNextLine() {
     case 7: showVector("Mag:", readings.vectors.mag); break;
     case 8: showValue("Mic: ", readings.mic, 0, " dB"); break;
   }
+  pushLine(readingsTop + line * 16);
   line = (line + 1) % 9;
 }
 
-// Trailing spaces on each line erase leftovers from a previous longer value.
+void startLine() {
+  lineCanvas.fillScreen(ST77XX_BLACK);
+  lineCanvas.setTextSize(2);
+  lineCanvas.setTextColor(ST77XX_WHITE);
+  lineCanvas.setCursor(0, 0);
+}
+
+void pushLine(int y) {
+  display.drawRGBBitmap(0, y, lineCanvas.getBuffer(), lineCanvas.width(), lineCanvas.height());
+}
+
 void showValue(const char *label, float value, int decimals, const char *unit) {
-  display.print(label);
-  display.print(value, decimals);
-  display.print(unit);
-  display.println("         ");
+  lineCanvas.print(label);
+  lineCanvas.print(value, decimals);
+  lineCanvas.print(unit);
 }
 
 void showVector(const char *label, const float v[3]) {
-  display.print(label);
-  display.print(v[0], 1);
-  display.print(",");
-  display.print(v[1], 1);
-  display.print(",");
-  display.print(v[2], 1);
-  display.println("         ");
+  lineCanvas.print(label);
+  lineCanvas.print(v[0], 1);
+  lineCanvas.print(",");
+  lineCanvas.print(v[1], 1);
+  lineCanvas.print(",");
+  lineCanvas.print(v[2], 1);
 }
 
 // ---- Small helpers ----
