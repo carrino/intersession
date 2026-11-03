@@ -1,0 +1,26 @@
+# Arduino IDE 2 reads default_fqbn and selects the CLUE board when this sketch is opened.
+default_fqbn: adafruit:nrf52:cluenrf52840
+
+# arduino-cli build profile, for checking the build from a terminal:
+#   arduino-cli compile --profile clue day1
+# It pins the board package and every library to the versions below, which are the latest
+# in the Arduino and Adafruit indexes as of November 2026.
+profiles:
+  clue:
+    fqbn: adafruit:nrf52:cluenrf52840
+    platforms:
+      - platform: adafruit:nrf52 (1.7.0)
+        platform_index_url: https://adafruit.github.io/arduino-board-index/package_adafruit_index.json
+    libraries:
+      - Adafruit ST7735 and ST7789 Library (1.12.0)
+      - Adafruit NeoPixel (1.15.5)
+      - Adafruit LSM6DS (4.7.4)
+      - Adafruit LIS3MDL (1.2.5)
+      - Adafruit APDS9960 Library (1.3.1)
+      - Adafruit BMP280 Library (3.0.0)
+      # Pulled in by the libraries above.
+      - Adafruit GFX Library (1.13.0)
+      - Adafruit BusIO (1.17.4)
+      - Adafruit Unified Sensor (1.1.15)
+
+default_profile: clue
