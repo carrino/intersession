@@ -134,6 +134,7 @@ void setup() {
   pixel.begin();
 
   setupDisplay();
+  unstickI2cBus();
   setupSensors();
   setupMic();
   setupImu();
@@ -387,6 +388,26 @@ void setupDisplay() {
   digitalWrite(TFT_BACKLIGHT_PIN, HIGH);
   display.setTextSize(2);
   display.setCursor(0, 16);  // the top line is for the BLE name and state
+}
+
+// A reset in the middle of an I2C read, which every upload risks, leaves that sensor
+// holding the data line low until it is clocked out, and every later I2C transfer would
+// then wait forever. Pulse the clock by hand until the data line is released, then send
+// a stop. Wire takes the pins over afterwards.
+void unstickI2cBus() {
+  pinMode(PIN_WIRE_SDA, INPUT_PULLUP);
+  pinMode(PIN_WIRE_SCL, OUTPUT_S0D1);  // open drain, like an I2C master
+  digitalWrite(PIN_WIRE_SCL, HIGH);
+  for (int i = 0; i < 9 && digitalRead(PIN_WIRE_SDA) == LOW; i++) {
+    digitalWrite(PIN_WIRE_SCL, LOW);
+    delayMicroseconds(5);
+    digitalWrite(PIN_WIRE_SCL, HIGH);
+    delayMicroseconds(5);
+  }
+  pinMode(PIN_WIRE_SDA, OUTPUT_S0D1);
+  digitalWrite(PIN_WIRE_SDA, LOW);  // stop condition: data rises while the clock is high
+  delayMicroseconds(5);
+  digitalWrite(PIN_WIRE_SDA, HIGH);
 }
 
 // The sensors are all on the board, so only a problem gets mentioned on the screen.
