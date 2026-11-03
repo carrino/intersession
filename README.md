@@ -31,11 +31,14 @@ You should now see **Adafruit CLUE** under Tools > Board > Adafruit nRF52 Boards
    name, `CLUE-xxxx`.
 4. Open the day's web page, for example `day1/orientation.html`, in Chrome or Edge. Only
    those browsers have Web Bluetooth. Click Connect and pick your board's name.
-5. A board that has never been calibrated shows a calibration screen on the page. Rest the
-   board on each of its six faces in turn: a face goes yellow when it is close to pointing
-   at the floor, fills green while the board is held still, and locks in after a second.
-   Once all six are in, the page works out each sensor's offset and the board keeps them in
-   its flash, so this is once per board. The Recalibrate button on the page starts over.
+5. A board that has never been calibrated shows a calibration screen on the page. Hold the
+   board in the air, away from the table, with each of its six faces toward the floor in
+   turn: a face goes yellow when it is close, fills green while you hold still, and locks in
+   after a second. Then set the board down on anything and leave it alone for a second. The
+   page works out each sensor's offset and the board keeps them in its flash, so this is
+   once per board. The Recalibrate button on the page starts over. The holds are in the air
+   because most tables have steel in them, which throws the magnetometer off; the set-down
+   step only uses the gyro, so the table does not matter there.
 
 ## When something goes wrong
 

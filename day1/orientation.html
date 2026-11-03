@@ -29,8 +29,9 @@
     <label>Back LED <input type="color" id="pixel" value="#000000" disabled></label>
     <button id="recalibrate" hidden>Recalibrate</button>
     <div id="calibration" hidden>
-      <p>Not calibrated. Rest the board with each face toward the floor. A face goes yellow when it is close,
-        fills green while the board holds still, and locks in after a second.</p>
+      <p>Not calibrated. Hold the board in the air, away from the desk, with each face toward the floor in turn.
+        A face goes yellow when it is close, fills green while you hold still, and locks in after a second.
+        Then set the board down on anything and leave it alone for a second: that measures the gyro.</p>
       <div id="faces"></div>
     </div>
     <table id="data"></table>
@@ -327,35 +328,42 @@
     }
 
     // ---- Calibration ----
-    // The board's sensors each read a little off zero. Resting the board on each of its six
-    // faces gives six still readings: the accelerometer's all lie on a sphere of radius g
+    // The board's sensors each read a little off zero. Holding each of the six faces toward
+    // the floor gives six readings: the accelerometer's all lie on a sphere of radius g
     // around its offset, however tilted each hold was, so the sphere's center is the offset,
-    // and the same goes for the mag. The gyro should read zero while still, so its offset is
-    // its average. The nine offsets go to the board, which keeps them in flash.
-    const FACES = [
+    // and the same goes for the mag. Those holds are in the air, away from the desk and
+    // whatever is magnetic in it, so a little hand wobble has to be fine. The gyro should
+    // read zero while not turning, which a hand never quite manages, so its offset comes
+    // from a last step with the board set down and left alone; the mag is not used there,
+    // so the desk does not matter. The nine offsets go to the board, which keeps them in flash.
+    const STEPS = [
       { name: '+x down', axis: [1, 0, 0] }, { name: '-x down', axis: [-1, 0, 0] },
       { name: '+y down', axis: [0, 1, 0] }, { name: '-y down', axis: [0, -1, 0] },
       { name: '+z down', axis: [0, 0, 1] }, { name: '-z down', axis: [0, 0, -1] },
+      { name: 'set down' },
     ];
-    const HOLD_SAMPLES = 10;                 // one second of the 10 Hz motion packets
-    const STILL_GYRO = 0.2;                  // rad/s, below this the board is not turning
+    const HOLD_SAMPLES = 10;    // one second of the 10 Hz motion packets
+    const HAND_WOBBLE = 0.5;    // m/s²: how far the accel may wander in a hand-held second, about 3°
+    const RESTING_ACCEL = 0.1;  // m/s² and
+    const RESTING_GYRO = 0.02;  // rad/s: how far the readings may wander in a set-down second
     const POINTING_DOT = Math.cos(15 * Math.PI / 180);  // how close to straight down a face must be
     const calibrationPanel = document.getElementById('calibration');
     const recalibrateButton = document.getElementById('recalibrate');
-    const cards = FACES.map(face => {
+    const cards = STEPS.map(step => {
       const card = document.createElement('div');
       card.className = 'face';
-      card.innerHTML = `<b>${face.name}</b><span></span>`;
+      card.innerHTML = `<b>${step.name}</b><span></span>`;
       document.getElementById('faces').appendChild(card);
       return card;
     });
     let calibrationChr = null;
-    let held = [];    // per face, the still readings collected so far
-    let locked = [];  // per face, the average reading once a second of them was held
+    let held = [];    // per step, the still readings collected so far
+    let locked = [];  // per step, the average reading once a second of them was held
+    let last = null;  // the previous packet, which a new hold is judged still against
 
     function showCalibrationScreen(show) {
-      held = FACES.map(() => []);
-      locked = FACES.map(() => null);
+      held = STEPS.map(() => []);
+      locked = STEPS.map(() => null);
       cards.forEach(card => {
         card.style.background = '';
         card.lastChild.textContent = '';
@@ -366,29 +374,36 @@
 
     // Runs on each motion packet while the calibration screen is up. The accelerometer
     // reads the push holding the board up, so the face toward the floor reads minus g on
-    // its axis. Moving the board starts that face's second over.
+    // its axis. Still means the readings stay near the first reading of the hold, which
+    // does not depend on the gyro's own offset; moving starts that step's second over.
     function calibrate() {
       const { accel, gyro, mag } = latest;
-      const g = Math.hypot(...accel);
-      const still = Math.hypot(...gyro) < STILL_GYRO && g > 8.8 && g < 10.8;
-      FACES.forEach((face, i) => {
+      STEPS.forEach((step, i) => {
         if (locked[i]) {
           return;
         }
-        const pointing = dot(face.axis, accel) < -POINTING_DOT * g;
+        const first = held[i][0] || last;
+        const still = first && (step.axis
+          ? distance(accel, first.accel) < HAND_WOBBLE
+          : distance(accel, first.accel) < RESTING_ACCEL && distance(gyro, first.gyro) < RESTING_GYRO);
+        const pointing = step.axis ? dot(step.axis, accel) < -POINTING_DOT * Math.hypot(...accel) : still;
         held[i] = pointing && still ? [...held[i], { accel, gyro, mag }] : [];
         if (held[i].length === HOLD_SAMPLES) {
           locked[i] = { accel: mean(held[i], 'accel'), gyro: mean(held[i], 'gyro'), mag: mean(held[i], 'mag') };
-          cards[i].lastChild.textContent = locked[i].accel.map(v => v.toFixed(2)).join(' ');
+          cards[i].lastChild.textContent = step.axis
+            ? locked[i].accel.map(v => v.toFixed(2)).join(' ')
+            : locked[i].gyro.map(v => v.toFixed(3)).join(' ');
         }
         const green = 100 * held[i].length / HOLD_SAMPLES;  // the sweep: green from the left as the second fills
         cards[i].style.background = pointing ? `linear-gradient(90deg, #060 ${green}%, #660 ${green}%)` : '';
       });
+      last = { accel, gyro };
       if (locked.every(Boolean)) {
+        const faces = locked.slice(0, 6);
         const offsets = [
-          ...sphereCenter(locked.map(l => l.accel)),
-          ...mean(locked, 'gyro'),
-          ...sphereCenter(locked.map(l => l.mag)),
+          ...sphereCenter(faces.map(l => l.accel)),
+          ...locked[6].gyro,
+          ...sphereCenter(faces.map(l => l.mag)),
         ];
         showCalibrationScreen(false);  // before the write finishes, so the next packet does not send again
         writeCalibration(offsets).catch(err => console.error(err));
@@ -408,6 +423,7 @@
     }
 
     const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+    const distance = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
     const mean = (readings, key) => [0, 1, 2].map(axis => readings.reduce((sum, r) => sum + r[key][axis], 0) / readings.length);
 
     // Least-squares center of the sphere through the points, the same fit as
