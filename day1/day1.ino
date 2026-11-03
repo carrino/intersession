@@ -125,7 +125,6 @@ volatile int32_t micCount = 0;
 int16_t micSamples[256];
 
 void setup() {
-  freeNfcPins();
   Serial.begin(115200);
   dwt_enable();  // start the CPU cycle counter
   pinMode(WHITE_LED_PIN, OUTPUT);
@@ -359,26 +358,6 @@ void onPixelWrite(uint16_t connHandle, BLECharacteristic *chr, uint8_t *rgb, uin
 }
 
 // ---- Setup ----
-
-// The white LEDs and the color sensor's interrupt sit on the chip's two NFC antenna pins,
-// which a fresh nRF52840 reserves for NFC. This one-time setting makes them ordinary GPIO
-// pins. It lives in flash and only takes effect after a reset, so the first time this
-// sketch runs on a board that still has NFC enabled, the board restarts once.
-void freeNfcPins() {
-  if ((NRF_UICR->NFCPINS & UICR_NFCPINS_PROTECT_Msk) != (UICR_NFCPINS_PROTECT_NFC << UICR_NFCPINS_PROTECT_Pos)) {
-    return;  // already done
-  }
-  NRF_NVMC->CONFIG = NVMC_CONFIG_WEN_Wen << NVMC_CONFIG_WEN_Pos;
-  while (NRF_NVMC->READY == NVMC_READY_READY_Busy) {
-  }
-  NRF_UICR->NFCPINS &= ~UICR_NFCPINS_PROTECT_Msk;
-  while (NRF_NVMC->READY == NVMC_READY_READY_Busy) {
-  }
-  NRF_NVMC->CONFIG = NVMC_CONFIG_WEN_Ren << NVMC_CONFIG_WEN_Pos;
-  while (NRF_NVMC->READY == NVMC_READY_READY_Busy) {
-  }
-  NVIC_SystemReset();
-}
 
 void setupDisplay() {
   display.init(240, 240);
