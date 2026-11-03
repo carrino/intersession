@@ -141,10 +141,12 @@ void setup() {
   setupImu();
   setupBle();
   readingsTop = display.getCursorY() + 8;
+  startWatchdog();
 }
 
 void loop() {
   static uint32_t lastQuaternionMs = 0, lastDebugMs = 0, lastSlowMs = 0, lastScreenMs = 0;
+  NRF_WDT->RR[0] = WDT_RR_RR_Reload;  // tell the watchdog we are still running
 
   // Data-ready stays high until we read, so also go when it is already high: a sample
   // that landed before the interrupt was attached never produces a rising edge.
@@ -387,6 +389,16 @@ void setupDisplay() {
   digitalWrite(TFT_BACKLIGHT_PIN, HIGH);
   display.setTextSize(2);
   display.setCursor(0, 16);  // the top line is for the BLE name and state
+}
+
+// A hardware timer that resets the chip if loop() stops reporting in for five seconds, so
+// a hang (an I2C transfer that never finishes, say) costs a reboot rather than a dead
+// board, and the bus is cleared on the way back up. A delay() longer than that trips it.
+void startWatchdog() {
+  NRF_WDT->CONFIG = WDT_CONFIG_SLEEP_Run << WDT_CONFIG_SLEEP_Pos;  // keeps counting while asleep
+  NRF_WDT->CRV = 5 * 32768;                                        // five seconds of its 32768 Hz clock
+  NRF_WDT->RREN = WDT_RREN_RR0_Msk;
+  NRF_WDT->TASKS_START = 1;
 }
 
 // A reset in the middle of an I2C read, which every upload risks, leaves that sensor
