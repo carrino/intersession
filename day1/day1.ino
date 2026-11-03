@@ -3,7 +3,7 @@
 //
 // Libraries (Arduino Library Manager unless noted): Adafruit Arcada, Adafruit LSM6DS,
 //   Adafruit LIS3MDL, Adafruit SHT31, Adafruit APDS9960, Adafruit BMP280, and the
-//   Adafruit nRF52 board package. Quaternion: https://github.com/carrino/Quaternion
+//   Adafruit nRF52 board package. Quaternion is in this repo under libraries/.
 
 #include <Adafruit_Arcada.h>
 #include <Adafruit_SPIFlash.h>

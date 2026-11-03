@@ -37,7 +37,7 @@
   <script type="module">
     import * as THREE from 'three';
 
-    // The CLUE's BLE service and its characteristics, one per sensor. Must match begin_ble.ino.
+    // The CLUE's BLE service and its characteristics, one per sensor. Must match day1.ino.
     // Each value is little-endian floats, except buttons which is one byte.
     const SERVICE_UUID = 'c10e0001-5a7e-4a6b-9f3e-0b6f2d9a1c01';
     const PIXEL_UUID = 'c10e000d-5a7e-4a6b-9f3e-0b6f2d9a1c01';  // writable: red, green, blue bytes
