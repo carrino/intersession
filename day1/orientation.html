@@ -13,7 +13,7 @@
     body { margin: 0; background: #111; color: #eee; font-family: sans-serif; }
     #ui { position: absolute; top: 1em; left: 1em; }
     table { margin-top: 1em; border-collapse: collapse; font-family: monospace; }
-    th, td { padding: 0.2em 0.6em; text-align: right; }
+    th, td { padding: 0.2em 0.6em; text-align: right; white-space: pre; }
     th { text-align: left; }
     .mag { color: #f0f; }
     .accel { color: #0f0; }
@@ -221,9 +221,10 @@
     function showTable() {
       const rows = CHARACTERISTICS.flatMap(spec => spec.fields).map(([name, count, unit]) => {
         const values = latest[name] || [];
-        const cells = values.map(v => v.toFixed(2));
+        const number = v => v.toFixed(2).padStart(8);  // fixed width, so columns never shift
+        const cells = values.map(number);
         if (VECTORS.has(name) && values.length) {
-          cells.push(`|v| ${Math.hypot(...values).toFixed(2)}`);
+          cells.push(`|v| ${number(Math.hypot(...values))}`);
         }
         if (name === 'mag fit' && values.length) {
           cells[4] = facesSeen(values[4]);
