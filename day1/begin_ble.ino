@@ -271,11 +271,18 @@ void updatePixel() {
   arcada.pixels.show();
 }
 
+void setPixel(uint8_t red, uint8_t green, uint8_t blue) {
+  pixelColor[0] = red;
+  pixelColor[1] = green;
+  pixelColor[2] = blue;
+  pixelSetOverBle = true;
+  pixelChar.write(pixelColor, sizeof(pixelColor));  // so reading the characteristic shows the current color
+}
+
 // Runs when a phone or web page writes the pixel characteristic. The fixed length
 // means the SoftDevice already rejected any write that is not exactly three bytes.
 void onPixelWrite(uint16_t connHandle, BLECharacteristic *chr, uint8_t *data, uint16_t len) {
-  memcpy(pixelColor, data, sizeof(pixelColor));
-  pixelSetOverBle = true;
+  setPixel(data[0], data[1], data[2]);
 }
 
 void pulseRedLed() {
@@ -400,9 +407,11 @@ void setupBle() {
   pixelChar.setWriteCallback(onPixelWrite);
   pixelChar.begin();
 
+  // A 128-bit UUID nearly fills the 31-byte advertising packet, leaving only 8 characters
+  // for the name, so the name goes in the scan response, which scanners ask for right after.
   Bluefruit.Advertising.addFlags(BLE_GAP_ADV_FLAGS_LE_ONLY_GENERAL_DISC_MODE);
   Bluefruit.Advertising.addService(sensorService);
-  Bluefruit.Advertising.addName();
+  Bluefruit.ScanResponse.addName();
   Bluefruit.Advertising.restartOnDisconnect(true);
   Bluefruit.Advertising.start(0);  // 0 = keep advertising until connected
 }
