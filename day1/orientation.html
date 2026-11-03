@@ -1,7 +1,7 @@
 <!doctype html>
 <!--
-  Shows the CLUE's orientation as a 3D board, live over Web Bluetooth, plus the
-  raw sensor data behind it. Open in Chrome or Edge (Web Bluetooth is not in
+  Shows the CLUE's orientation as a 3D board, live over Web Bluetooth, plus every
+  sensor reading behind it. Open in Chrome or Edge (Web Bluetooth is not in
   Safari or Firefox). Opening the file directly works, or serve it with:
   python3 -m http.server
 -->
@@ -37,6 +37,21 @@
     // Must match the UUIDs in begin_ble.ino.
     const SERVICE_UUID = 'c10e0001-5a7e-4a6b-9f3e-0b6f2d9a1c01';
     const SENSORS_UUID = 'c10e0002-5a7e-4a6b-9f3e-0b6f2d9a1c01';
+
+    // The fields of the CLUE's SensorPacket, in order: name, how many floats, unit.
+    const LAYOUT = [
+      ['quaternion', 4, 'w x y z'],
+      ['accel', 3, 'm/s²'],
+      ['gyro', 3, 'rad/s'],
+      ['mag', 3, 'µT'],
+      ['temperature', 1, '°C'],
+      ['pressure', 1, 'hPa'],
+      ['humidity', 1, '%'],
+      ['color', 4, 'r g b clear'],
+      ['mic', 1, 'peak to peak'],
+      ['buttons', 1, 'A=1 B=2'],
+    ];
+    const PACKET_FLOATS = LAYOUT.reduce((sum, [, count]) => sum + count, 0);
 
     // ---- 3D scene ----
     const scene = new THREE.Scene();
@@ -98,23 +113,13 @@
       status.textContent = `Connected to ${device.name}`;
     }
 
-    // The CLUE sends 13 little-endian floats, in the order of its SensorPacket struct.
-    const PACKET_BYTES = 13 * 4;
-    const UNITS = { quaternion: '', accel: 'm/s²', gyro: 'rad/s', mag: 'µT' };
-
     function onPacket(event) {
       const data = event.target.value;
-      if (data.byteLength !== PACKET_BYTES) {
-        status.textContent = `Got ${data.byteLength} bytes, expected ${PACKET_BYTES} (BLE MTU too small?)`;
+      if (data.byteLength !== PACKET_FLOATS * 4) {
+        status.textContent = `Got ${data.byteLength} bytes, expected ${PACKET_FLOATS * 4} (BLE MTU too small?)`;
         return;
       }
-      const f = i => data.getFloat32(i * 4, true);
-      const packet = {
-        quaternion: [f(0), f(1), f(2), f(3)],  // w, x, y, z
-        accel: [f(4), f(5), f(6)],
-        gyro: [f(7), f(8), f(9)],
-        mag: [f(10), f(11), f(12)],
-      };
+      const packet = parsePacket(data);
 
       const [w, x, y, z] = packet.quaternion;
       board.quaternion.set(x, y, z, w);
@@ -123,14 +128,27 @@
       showTable(packet);
     }
 
+    // Splits the packet's little-endian floats into {name: [values]} following LAYOUT.
+    function parsePacket(data) {
+      const packet = {};
+      let i = 0;
+      for (const [name, count] of LAYOUT) {
+        packet[name] = [];
+        for (let n = 0; n < count; n++) {
+          packet[name].push(data.getFloat32(4 * i++, true));
+        }
+      }
+      return packet;
+    }
+
+    // One row per field: its values, the vector length for 3-vectors, then the unit.
     function showTable(packet) {
-      const row = (name, values) => {
-        const [w, x, y, z] = values.length === 4 ? values : ['', ...values];
-        const cells = [w, x, y, z, Math.hypot(...values), UNITS[name]];
-        return `<tr><th class="${name}">${name}</th>${cells.map(c => `<td>${typeof c === 'number' ? c.toFixed(2) : c}</td>`).join('')}</tr>`;
-      };
-      table.innerHTML = '<tr><th></th><th>w</th><th>x</th><th>y</th><th>z</th><th>|v|</th><th></th></tr>'
-        + Object.entries(packet).map(([name, values]) => row(name, values)).join('');
+      const cell = v => `<td>${v.toFixed(2)}</td>`;
+      table.innerHTML = LAYOUT.map(([name, count, unit]) => {
+        const values = packet[name];
+        const length = count === 3 ? `<td>|v| ${Math.hypot(...values).toFixed(2)}</td>` : '';
+        return `<tr><th class="${name}">${name}</th>${values.map(cell).join('')}${length}<td>${unit}</td></tr>`;
+      }).join('');
     }
 
     if (navigator.bluetooth) {
