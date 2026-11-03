@@ -67,7 +67,7 @@ const int BLE_NOTIFY_QUEUE = 8;
 // board turns.
 struct Vectors {
   float accel[3];       // raw, m/s^2
-  float gyro[3];        // raw with the bias removed, rad/s
+  float gyro[3];        // raw, rad/s
   float mag[3];         // raw with the hard-iron offset removed, microtesla
   float accelNed[3];    // m/s^2
   float magNed[3];      // microtesla
@@ -120,9 +120,6 @@ MagCalibration magCalibration;
 // screen up, with the USB plug pointing north. Lying flat the accelerometer reads -g on
 // z, since it measures the push holding the board up, not gravity itself.
 Quaternion orientation;
-
-// The gyro reads a small constant rate even when still. Measured at startup and subtracted.
-float gyroBias[3] = {0, 0, 0};
 
 // Set by the IMU's data-ready interrupt, cleared when loop() consumes the sample.
 // The CPU cycle counter gives us a precise timestamp for when the sample was taken.
@@ -212,9 +209,6 @@ void readImu() {
   float accel[3], gyro[3];
   copyVector(accel, event[0].acceleration);
   copyVector(gyro, event[1].gyro);
-  for (int i = 0; i < 3; i++) {
-    gyro[i] -= gyroBias[i];
-  }
 
   // How far the board turned since the last sample. Gyro is in radians per second, so
   // rate * dt is the rotation.
@@ -434,24 +428,7 @@ void setupImu() {
   imu->setAccelDataRate(LSM6DS_RATE_416_HZ);
   imu->configInt1(false, true, false);  // (temperature, gyro, accel) data-ready on INT1
   pinMode(IMU_INTERRUPT_PIN, INPUT);
-  measureGyroBias();
   attachInterrupt(IMU_INTERRUPT_PIN, onImuDataReady, RISING);
-}
-
-// Average a second of gyro readings while the board sits still after reset. The gyro
-// takes 80 ms to settle after its rate is set and its first readings are garbage.
-void measureGyroBias() {
-  const int samples = 400;
-  sensors_event_t accel, gyro, temp;
-  delay(150);
-  for (int n = 0; n < samples; n++) {
-    while (!digitalRead(IMU_INTERRUPT_PIN)) {
-    }
-    imu->getEvent(&accel, &gyro, &temp);
-    for (int i = 0; i < 3; i++) {
-      gyroBias[i] += gyro.gyro.v[i] / samples;
-    }
-  }
 }
 
 void setupBle() {
