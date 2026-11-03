@@ -112,7 +112,7 @@ void setup() {
   pixel.begin();
 
   setupDisplay();
-  checkSensors();
+  setupSensors();
   setupMic();
   setupImu();
   setupBle();
@@ -303,39 +303,29 @@ void setupDisplay() {
   display.setTextSize(2);
 }
 
-void checkSensors() {
-  display.setTextColor(ST77XX_WHITE);
-  display.println("Sensors Found: ");
-
-  bool apdsFound = apds9960.begin();
-  if (apdsFound) {
+// The sensors are all on the board, so only a problem gets mentioned on the screen.
+void setupSensors() {
+  if (apds9960.begin()) {
     apds9960.enableColor(true);
     apds9960.enableProximity(true);
+  } else {
+    warn("APDS9960 missing");
   }
-  reportSensor("APDS9960 ", apdsFound);
-
   if (lsm6ds33.begin_I2C()) {
     imu = &lsm6ds33;
   } else if (lsm6ds3trc.begin_I2C()) {
     imu = &lsm6ds3trc;
   }
-  reportSensor("LSM6DS3x ", imu != NULL);
-  display.println();
-
-  reportSensor("LIS3MDL ", lis3mdl.begin_I2C());
-  reportSensor("SHT30 ", sht30.begin(0x44));
-  reportSensor("BMP280", bmp280.begin());
-  display.println();
-
+  if (!lis3mdl.begin_I2C()) {
+    warn("LIS3MDL missing");
+  }
+  if (!sht30.begin(0x44)) {
+    warn("SHT30 missing");
+  }
+  if (!bmp280.begin()) {
+    warn("BMP280 missing");
+  }
   Wire.setClock(400000);  // every chip supports fast mode I2C; their begin() calls left it at 100 kHz
-}
-
-// Prints a sensor's name on the startup screen: green if it answered, red if not.
-void reportSensor(const char *name, bool found) {
-  Serial.print(name);
-  Serial.println(found ? "OK" : "not found");
-  display.setTextColor(found ? ST77XX_GREEN : ST77XX_RED);
-  display.print(name);
 }
 
 void setupMic() {
@@ -466,10 +456,15 @@ void copyVector(float dest[3], const sensors_vec_t &v) {
   dest[2] = v.z;
 }
 
-void halt(const char *message) {
+// Shows a problem on the screen in red and keeps going.
+void warn(const char *message) {
   Serial.println(message);
   display.setTextColor(ST77XX_RED);
   display.println(message);
+}
+
+void halt(const char *message) {
+  warn(message);
   while (true) {
   }
 }
