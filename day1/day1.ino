@@ -174,6 +174,7 @@ void loop() {
     send(humidityChar, &readings.humidity, sizeof(readings.humidity));
     send(magFitChar, readings.magFit, sizeof(readings.magFit));
     send(statsChar, readings.stats, sizeof(readings.stats));
+    send(buttonsChar, &readings.buttons, sizeof(readings.buttons));  // in case a change was dropped
     showBleStatus();
   }
   if (every(1000 / SCREEN_LINES_HZ, lastScreenMs)) {
