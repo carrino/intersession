@@ -43,6 +43,9 @@ You should now see **Adafruit CLUE** under Tools > Board > Adafruit nRF52 Boards
    not. Within half a second the screen's `Plug:` line and the page's plug-ins row name it,
    and the log says when it was plugged in or pulled out. Reading it is the next step and
    takes that sensor's library.
+7. The three ring pads P0, P1 and P2 on the bottom edge are touch pads. The screen's
+   `Touch:` line and the page's touch row count higher while a finger is on one, or on
+   anything conductive clipped to it, such as the conductive fabric on an alligator clip.
 
 ## When something goes wrong
 

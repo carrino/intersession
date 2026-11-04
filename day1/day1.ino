@@ -27,6 +27,14 @@ const int NEOPIXEL_PIN = 18;
 const int SPEAKER_PIN = 46;
 const int WHITE_LED_PIN = 43;
 const int IMU_INTERRUPT_PIN = 45;  // the IMU's INT1 line
+const int TOUCH_PINS[3] = {0, 1, 2};  // the P0, P1, P2 ring pads on the bottom edge
+
+// Touch sensing on the pads, the same trick CircuitPython uses: charge a pad, let it
+// float, and count how long it stays high. A finger adds capacitance and a leak to
+// ground, so the count changes. The count stops here so a pad that never falls (nothing
+// to discharge it; a 1 megohm resistor from the pad to GND fixes that) cannot stall the loop.
+const int TOUCH_SAMPLES = 4;
+const int TOUCH_MAX_TICKS = 2000;
 
 // Every sensor is on the one I2C bus. The addresses are checked twice a second to catch
 // a sensor that has stopped answering, since the sensor libraries do not report that.
@@ -56,9 +64,9 @@ const int SHT30_ADDRESS = 0x44;
 
 // How often each group of readings is sent, in packets per second.
 const int QUATERNION_HZ = 30;  // the orientation, the one thing the page needs fast
-const int DEBUG_HZ = 10;       // accel, gyro, mag, color, proximity, mic
+const int DEBUG_HZ = 10;       // accel, gyro, mag, color, proximity, mic, touch
 const int SLOW_HZ = 2;         // temperature, pressure, humidity, mag fit, stats
-const int SCREEN_LINES_HZ = 20;  // one line of the screen per tick: 10 lines refresh every 0.5 s
+const int SCREEN_LINES_HZ = 20;  // one line of the screen per tick: 11 lines refresh every 0.55 s
 
 // How far toward the accelerometer's idea of "down" we move on each IMU sample, and how
 // far toward the magnetometer's idea of "north" on each mag reading. Small is smooth but
@@ -93,6 +101,7 @@ BLECharacteristic statsChar("c10e000f-5a7e-4a6b-9f3e-0b6f2d9a1c01");
 BLECharacteristic logChar("c10e0010-5a7e-4a6b-9f3e-0b6f2d9a1c01");  // text: every note() and warn()
 BLECharacteristic calibrationChar("c10e0011-5a7e-4a6b-9f3e-0b6f2d9a1c01");  // read/write: the Calibration below
 BLECharacteristic pluginsChar("c10e0012-5a7e-4a6b-9f3e-0b6f2d9a1c01");
+BLECharacteristic touchChar("c10e0013-5a7e-4a6b-9f3e-0b6f2d9a1c01");
 
 // One-time per-axis offsets for this board's sensors, found by the page's calibration
 // screen (hold each face of the board toward the floor, still, for a second) and kept in
@@ -133,6 +142,7 @@ struct Readings {
   float proximity;      // 0 far to 255 near
   float mic;            // approximate dB SPL
   float plugins;        // which plug-in sensors answer, a bit each in the order of plugins[]
+  float touch[3];       // P0, P1, P2 pad counts, higher when touched
   uint8_t buttons;      // bit 0 = A, bit 1 = B
 };
 Readings readings;
@@ -161,6 +171,7 @@ Published published[] = {
   {magFitChar, readings.magFit, sizeof(readings.magFit)},
   {statsChar, readings.stats, sizeof(readings.stats)},
   {pluginsChar, &readings.plugins, sizeof(readings.plugins)},
+  {touchChar, readings.touch, sizeof(readings.touch)},
   {logChar, logLine, sizeof(logLine)},
 };
 
@@ -253,10 +264,12 @@ void loop() {
     readMag();
     stage = STAGE_LIGHT_MIC;
     readLightAndMic();
+    readTouch();
     publish(vectorsChar);
     publish(colorChar);
     publish(proximityChar);
     publish(micChar);
+    publish(touchChar);
   }
   if (every(1000 / SLOW_HZ, lastSlowMs)) {
     stage = STAGE_ENVIRONMENT;
@@ -521,6 +534,27 @@ void onMicData() {
 
 // Same as the factory demo: A beeps, B lights the white LEDs on the front. The color
 // sensor reads reflected light, so hold B to light whatever is in front of it.
+void readTouch() {
+  for (int i = 0; i < 3; i++) {
+    readings.touch[i] = touchRead(TOUCH_PINS[i]);
+  }
+}
+
+// How long, in loop ticks, the pad stays high after being charged and let go.
+int touchRead(int pin) {
+  int ticks = 0;
+  for (int sample = 0; sample < TOUCH_SAMPLES; sample++) {
+    pinMode(pin, OUTPUT);
+    digitalWrite(pin, HIGH);
+    delayMicroseconds(10);
+    pinMode(pin, INPUT);
+    while (digitalRead(pin) == HIGH && ticks < TOUCH_MAX_TICKS) {
+      ticks++;
+    }
+  }
+  return ticks;
+}
+
 void handleButtons() {
   uint8_t buttons = (digitalRead(BUTTON_A_PIN) == LOW ? 1 : 0) | (digitalRead(BUTTON_B_PIN) == LOW ? 2 : 0);
   if (buttons != readings.buttons) {
@@ -857,9 +891,18 @@ void showNextLine() {
     case 7: showVector("Mag:", readings.vectors.mag); break;
     case 8: showValue("Mic: ", readings.mic, 0, " dB"); break;
     case 9: showPlugins(); break;
+    case 10: showTouch(); break;
   }
   pushLine(readingsTop + line * 16);
-  line = (line + 1) % 10;
+  line = (line + 1) % 11;
+}
+
+void showTouch() {
+  lineCanvas.print("Touch: ");
+  for (int i = 0; i < 3; i++) {
+    lineCanvas.print(i ? " " : "");
+    lineCanvas.print((int)readings.touch[i]);
+  }
 }
 
 // The plug-in sensors answering right now, by name.
