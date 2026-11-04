@@ -72,7 +72,10 @@
       { uuid: 'c10e000b-5a7e-4a6b-9f3e-0b6f2d9a1c01', fields: [['buttons', 1, 'A=1 B=2']] },
       { uuid: 'c10e000c-5a7e-4a6b-9f3e-0b6f2d9a1c01', fields: [['mag fit', 5, 'offset x y z, radius µT, faces seen']] },
       { uuid: 'c10e000f-5a7e-4a6b-9f3e-0b6f2d9a1c01', fields: [['stats', 3, 'IMU samples/s, tilt error °, missed updates']] },
+      { uuid: 'c10e0012-5a7e-4a6b-9f3e-0b6f2d9a1c01', fields: [['plug-ins', 1, 'STEMMA QT sensors answering']] },
     ];
+    // The plug-in sensors the board knows, in the order of its bits. Must match day1.ino.
+    const PLUGINS = ['VL53L1X', 'AMG8833', 'MPR121/DRV2605', 'ANO encoder', 'PA1010D', 'SCD-43', 'LTR390', 'MLX90632'];
 
     // ---- 3D scene ----
     const scene = new THREE.Scene();
@@ -288,6 +291,9 @@
         }
         if (name === 'mag fit' && values.length) {
           cells[4] = facesSeen(values[4]);
+        }
+        if (name === 'plug-ins' && values.length) {
+          cells[0] = PLUGINS.filter((_, i) => values[0] & (1 << i)).join(' ') || 'none';
         }
         if (name === 'color' && values.length) {
           cells[4] = colorSwatch(values);

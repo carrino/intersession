@@ -13,6 +13,8 @@ stays home. Check with the maker space ahead of time about what they have (botto
 - AAA batteries: three per holder plus a spare set.
 - A little kit: resistors, a few LEDs, jumper wires, a half-size breadboard or two.
 - Double-sided foam tape, velcro, zip ties, rubber bands: how projects get held together.
+  The CLUE has no mounting holes; the only holes are the five ring pads on its bottom
+  edge, which are live pins, so only nylon screws go through those.
 
 ## Tools
 

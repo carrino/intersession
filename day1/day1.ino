@@ -38,13 +38,27 @@ struct Sensor {
 Sensor sensors[] = {
   {"APDS9960", 0x39, true}, {"LSM6DS", 0x6A, true}, {"LIS3MDL", 0x1C, true}, {"SHT30", 0x44, true}, {"BMP280", 0x77, true},
 };
+
+// STEMMA QT sensors a student may plug into the port on the bottom edge, known by their
+// I2C address. Each is a bit of readings.plugins, in this order. The MPR121 and the
+// DRV2605 both answer at 0x5A, so the address alone cannot tell those two apart.
+Sensor plugins[] = {
+  {"VL53L1X", 0x29, false},         // distance
+  {"AMG8833", 0x69, false},         // thermal camera
+  {"MPR121/DRV2605", 0x5A, false},  // touch pads / haptic motor
+  {"ANO encoder", 0x49, false},     // dial with buttons
+  {"PA1010D", 0x10, false},         // GPS
+  {"SCD-43", 0x62, false},          // CO2
+  {"LTR390", 0x53, false},          // UV
+  {"MLX90632", 0x3A, false},        // non-contact temperature
+};
 const int SHT30_ADDRESS = 0x44;
 
 // How often each group of readings is sent, in packets per second.
 const int QUATERNION_HZ = 30;  // the orientation, the one thing the page needs fast
 const int DEBUG_HZ = 10;       // accel, gyro, mag, color, proximity, mic
 const int SLOW_HZ = 2;         // temperature, pressure, humidity, mag fit, stats
-const int SCREEN_LINES_HZ = 20;  // one line of the screen per tick: 9 lines refresh every 0.45 s
+const int SCREEN_LINES_HZ = 20;  // one line of the screen per tick: 10 lines refresh every 0.5 s
 
 // How far toward the accelerometer's idea of "down" we move on each IMU sample, and how
 // far toward the magnetometer's idea of "north" on each mag reading. Small is smooth but
@@ -78,6 +92,7 @@ BLECharacteristic proximityChar("c10e000e-5a7e-4a6b-9f3e-0b6f2d9a1c01");
 BLECharacteristic statsChar("c10e000f-5a7e-4a6b-9f3e-0b6f2d9a1c01");
 BLECharacteristic logChar("c10e0010-5a7e-4a6b-9f3e-0b6f2d9a1c01");  // text: every note() and warn()
 BLECharacteristic calibrationChar("c10e0011-5a7e-4a6b-9f3e-0b6f2d9a1c01");  // read/write: the Calibration below
+BLECharacteristic pluginsChar("c10e0012-5a7e-4a6b-9f3e-0b6f2d9a1c01");
 
 // One-time per-axis offsets for this board's sensors, found by the page's calibration
 // screen (hold each face of the board toward the floor, still, for a second) and kept in
@@ -117,6 +132,7 @@ struct Readings {
   float color[4];       // red, green, blue, clear light counts
   float proximity;      // 0 far to 255 near
   float mic;            // approximate dB SPL
+  float plugins;        // which plug-in sensors answer, a bit each in the order of plugins[]
   uint8_t buttons;      // bit 0 = A, bit 1 = B
 };
 Readings readings;
@@ -144,6 +160,7 @@ Published published[] = {
   {buttonsChar, &readings.buttons, sizeof(readings.buttons)},
   {magFitChar, readings.magFit, sizeof(readings.magFit)},
   {statsChar, readings.stats, sizeof(readings.stats)},
+  {pluginsChar, &readings.plugins, sizeof(readings.plugins)},
   {logChar, logLine, sizeof(logLine)},
 };
 
@@ -349,16 +366,37 @@ void updateStats() {
 // An address-only I2C transfer, the thing an I2C scanner does: a live sensor acknowledges
 // it, a dead one does not. Logs each sensor's first miss and its recovery.
 void checkSensorsAnswer() {
+  char message[64];
   for (Sensor &sensor : sensors) {
-    Wire.beginTransmission(sensor.address);
-    bool answering = Wire.endTransmission() == 0;
+    bool answering = answers(sensor.address);
     if (answering != sensor.answering) {
       sensor.answering = answering;
-      char message[64];
       snprintf(message, sizeof(message), "%s %s", sensor.name, answering ? "back" : "not answering");
       answering ? note(message) : warn(message);
     }
   }
+
+  // The same check finds a plug-in sensor the moment it is plugged in or pulled out.
+  int plugged = 0;
+  for (int i = 0; i < (int)(sizeof(plugins) / sizeof(plugins[0])); i++) {
+    bool answering = answers(plugins[i].address);
+    if (answering != plugins[i].answering) {
+      plugins[i].answering = answering;
+      snprintf(message, sizeof(message), "%s %s", plugins[i].name, answering ? "plugged in" : "unplugged");
+      note(message);
+    }
+    plugged |= answering << i;
+  }
+  if (plugged != readings.plugins) {
+    readings.plugins = plugged;
+    publish(pluginsChar);
+  }
+}
+
+// Whether a chip at this address acknowledges its name being called on the I2C bus.
+bool answers(uint8_t address) {
+  Wire.beginTransmission(address);
+  return Wire.endTransmission() == 0;
 }
 
 // Raw until the board is calibrated. After that the stored offset comes off, the sphere
@@ -818,9 +856,21 @@ void showNextLine() {
     case 6: showVector("Gyro:", readings.vectors.gyro); break;
     case 7: showVector("Mag:", readings.vectors.mag); break;
     case 8: showValue("Mic: ", readings.mic, 0, " dB"); break;
+    case 9: showPlugins(); break;
   }
   pushLine(readingsTop + line * 16);
-  line = (line + 1) % 9;
+  line = (line + 1) % 10;
+}
+
+// The plug-in sensors answering right now, by name.
+void showPlugins() {
+  lineCanvas.print("Plug:");
+  for (Sensor &plugin : plugins) {
+    if (plugin.answering) {
+      lineCanvas.print(" ");
+      lineCanvas.print(plugin.name);
+    }
+  }
 }
 
 void startLine() {

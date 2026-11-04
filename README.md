@@ -39,6 +39,10 @@ You should now see **Adafruit CLUE** under Tools > Board > Adafruit nRF52 Boards
    once per board. The Recalibrate button on the page starts over. The holds are in the air
    because most tables have steel in them, which throws the magnetometer off; the set-down
    step only uses the gyro, so the table does not matter there.
+6. Plug a STEMMA QT sensor into the port on the bottom edge, with the board running or
+   not. Within half a second the screen's `Plug:` line and the page's plug-ins row name it,
+   and the log says when it was plugged in or pulled out. Reading it is the next step and
+   takes that sensor's library.
 
 ## When something goes wrong
 
