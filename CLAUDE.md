@@ -6,4 +6,5 @@
 - Follow the existing style: braces on every block, small helpers with a one-line comment
   saying why, constants at the top of the sketch.
 - Each day's sketch lives in its own folder named after the sketch (`day1/day1.ino`), with
-  its companion files beside it. `README.md` has the build setup and `TODO.md` the backlog.
+  its companion files beside it. `README.md` has the build setup, `TODO.md` the backlog and
+  `PACKING.md` what to bring to the class.

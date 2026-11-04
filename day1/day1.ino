@@ -27,6 +27,14 @@ const int NEOPIXEL_PIN = 18;
 const int SPEAKER_PIN = 46;
 const int WHITE_LED_PIN = 43;
 const int IMU_INTERRUPT_PIN = 45;  // the IMU's INT1 line
+const int TOUCH_PINS[3] = {0, 1, 2};  // the P0, P1, P2 ring pads on the bottom edge
+
+// Touch sensing on the pads, the same trick CircuitPython uses: charge a pad, let it
+// float, and count how long it stays high. A finger adds capacitance and a leak to
+// ground, so the count changes. The count stops here so a pad that never falls (nothing
+// to discharge it; a 1 megohm resistor from the pad to GND fixes that) cannot stall the loop.
+const int TOUCH_SAMPLES = 4;
+const int TOUCH_MAX_TICKS = 2000;
 
 // Every sensor is on the one I2C bus. The addresses are checked twice a second to catch
 // a sensor that has stopped answering, since the sensor libraries do not report that.
@@ -38,13 +46,27 @@ struct Sensor {
 Sensor sensors[] = {
   {"APDS9960", 0x39, true}, {"LSM6DS", 0x6A, true}, {"LIS3MDL", 0x1C, true}, {"SHT30", 0x44, true}, {"BMP280", 0x77, true},
 };
+
+// STEMMA QT sensors a student may plug into the port on the bottom edge, known by their
+// I2C address. Each is a bit of readings.plugins, in this order. The MPR121 and the
+// DRV2605 both answer at 0x5A, so the address alone cannot tell those two apart.
+Sensor plugins[] = {
+  {"VL53L1X", 0x29, false},         // distance
+  {"AMG8833", 0x69, false},         // thermal camera
+  {"MPR121/DRV2605", 0x5A, false},  // touch pads / haptic motor
+  {"ANO encoder", 0x49, false},     // dial with buttons
+  {"PA1010D", 0x10, false},         // GPS
+  {"SCD-43", 0x62, false},          // CO2
+  {"LTR390", 0x53, false},          // UV
+  {"MLX90632", 0x3A, false},        // non-contact temperature
+};
 const int SHT30_ADDRESS = 0x44;
 
 // How often each group of readings is sent, in packets per second.
 const int QUATERNION_HZ = 30;  // the orientation, the one thing the page needs fast
-const int DEBUG_HZ = 10;       // accel, gyro, mag, color, proximity, mic
+const int DEBUG_HZ = 10;       // accel, gyro, mag, color, proximity, mic, touch
 const int SLOW_HZ = 2;         // temperature, pressure, humidity, mag fit, stats
-const int SCREEN_LINES_HZ = 20;  // one line of the screen per tick: 9 lines refresh every 0.45 s
+const int SCREEN_LINES_HZ = 20;  // one line of the screen per tick: 11 lines refresh every 0.55 s
 
 // How far toward the accelerometer's idea of "down" we move on each IMU sample, and how
 // far toward the magnetometer's idea of "north" on each mag reading. Small is smooth but
@@ -78,6 +100,8 @@ BLECharacteristic proximityChar("c10e000e-5a7e-4a6b-9f3e-0b6f2d9a1c01");
 BLECharacteristic statsChar("c10e000f-5a7e-4a6b-9f3e-0b6f2d9a1c01");
 BLECharacteristic logChar("c10e0010-5a7e-4a6b-9f3e-0b6f2d9a1c01");  // text: every note() and warn()
 BLECharacteristic calibrationChar("c10e0011-5a7e-4a6b-9f3e-0b6f2d9a1c01");  // read/write: the Calibration below
+BLECharacteristic pluginsChar("c10e0012-5a7e-4a6b-9f3e-0b6f2d9a1c01");
+BLECharacteristic touchChar("c10e0013-5a7e-4a6b-9f3e-0b6f2d9a1c01");
 
 // One-time per-axis offsets for this board's sensors, found by the page's calibration
 // screen (hold each face of the board toward the floor, still, for a second) and kept in
@@ -109,14 +133,17 @@ struct Readings {
   float quaternion[4];  // w, x, y, z
   Vectors vectors;
   float magFit[5];      // offset x, y, z, field strength (microtesla), faces seen as bits +x -x +y -y +z -z
-  float stats[3];       // IMU samples fused per second; degrees between where we think down is and true
-                        // down; updates subscribers missed because the radio was busy
+  float stats[4];       // IMU samples fused per second; degrees between where we think down is and true
+                        // down; updates subscribers missed because the radio was busy; stall reboots
+                        // since power-on
   float temperature;    // C
   float pressure;       // hPa
   float humidity;       // percent
   float color[4];       // red, green, blue, clear light counts
   float proximity;      // 0 far to 255 near
   float mic;            // approximate dB SPL
+  float plugins;        // which plug-in sensors answer, a bit each in the order of plugins[]
+  float touch[3];       // P0, P1, P2 pad counts, higher when touched
   uint8_t buttons;      // bit 0 = A, bit 1 = B
 };
 Readings readings;
@@ -144,6 +171,8 @@ Published published[] = {
   {buttonsChar, &readings.buttons, sizeof(readings.buttons)},
   {magFitChar, readings.magFit, sizeof(readings.magFit)},
   {statsChar, readings.stats, sizeof(readings.stats)},
+  {pluginsChar, &readings.plugins, sizeof(readings.plugins)},
+  {touchChar, readings.touch, sizeof(readings.touch)},
   {logChar, logLine, sizeof(logLine)},
 };
 
@@ -153,6 +182,7 @@ const char *STAGE_NAMES[STAGE_COUNT] = {"nothing", "BLE", "the IMU", "the magnet
                                         "the environment sensors", "the screen"};
 volatile Stage stage = STAGE_NONE;
 volatile uint32_t loopAliveMs = 0;  // when loop() last checked in
+int stallReboots = 0;               // since power-on; a reset keeps it in the retention register
 SoftwareTimer stallTimer;
 
 char bleName[16];     // CLUE-xxxx, shown with the connection state on the top line
@@ -236,10 +266,12 @@ void loop() {
     readMag();
     stage = STAGE_LIGHT_MIC;
     readLightAndMic();
+    readTouch();
     publish(vectorsChar);
     publish(colorChar);
     publish(proximityChar);
     publish(micChar);
+    publish(touchChar);
   }
   if (every(1000 / SLOW_HZ, lastSlowMs)) {
     stage = STAGE_ENVIRONMENT;
@@ -349,16 +381,37 @@ void updateStats() {
 // An address-only I2C transfer, the thing an I2C scanner does: a live sensor acknowledges
 // it, a dead one does not. Logs each sensor's first miss and its recovery.
 void checkSensorsAnswer() {
+  char message[64];
   for (Sensor &sensor : sensors) {
-    Wire.beginTransmission(sensor.address);
-    bool answering = Wire.endTransmission() == 0;
+    bool answering = answers(sensor.address);
     if (answering != sensor.answering) {
       sensor.answering = answering;
-      char message[64];
       snprintf(message, sizeof(message), "%s %s", sensor.name, answering ? "back" : "not answering");
       answering ? note(message) : warn(message);
     }
   }
+
+  // The same check finds a plug-in sensor the moment it is plugged in or pulled out.
+  int plugged = 0;
+  for (int i = 0; i < (int)(sizeof(plugins) / sizeof(plugins[0])); i++) {
+    bool answering = answers(plugins[i].address);
+    if (answering != plugins[i].answering) {
+      plugins[i].answering = answering;
+      snprintf(message, sizeof(message), "%s %s", plugins[i].name, answering ? "plugged in" : "unplugged");
+      note(message);
+    }
+    plugged |= answering << i;
+  }
+  if (plugged != readings.plugins) {
+    readings.plugins = plugged;
+    publish(pluginsChar);
+  }
+}
+
+// Whether a chip at this address acknowledges its name being called on the I2C bus.
+bool answers(uint8_t address) {
+  Wire.beginTransmission(address);
+  return Wire.endTransmission() == 0;
 }
 
 // Raw until the board is calibrated. After that the stored offset comes off, the sphere
@@ -483,6 +536,27 @@ void onMicData() {
 
 // Same as the factory demo: A beeps, B lights the white LEDs on the front. The color
 // sensor reads reflected light, so hold B to light whatever is in front of it.
+void readTouch() {
+  for (int i = 0; i < 3; i++) {
+    readings.touch[i] = touchRead(TOUCH_PINS[i]);
+  }
+}
+
+// How long, in loop ticks, the pad stays high after being charged and let go.
+int touchRead(int pin) {
+  int ticks = 0;
+  for (int sample = 0; sample < TOUCH_SAMPLES; sample++) {
+    pinMode(pin, OUTPUT);
+    digitalWrite(pin, HIGH);
+    delayMicroseconds(10);
+    pinMode(pin, INPUT);
+    while (digitalRead(pin) == HIGH && ticks < TOUCH_MAX_TICKS) {
+      ticks++;
+    }
+  }
+  return ticks;
+}
+
 void handleButtons() {
   uint8_t buttons = (digitalRead(BUTTON_A_PIN) == LOW ? 1 : 0) | (digitalRead(BUTTON_B_PIN) == LOW ? 2 : 0);
   if (buttons != readings.buttons) {
@@ -561,17 +635,21 @@ void setupDisplay() {
 void onStallCheck(TimerHandle_t timer) {
   static int ticksStuck = 0;
   if (millis() - loopAliveMs < 1000) {
+    if (ticksStuck) {
+      note("Loop running again");  // slow, then, not stuck
+    }
     ticksStuck = 0;
     return;
   }
   ticksStuck++;
   if (ticksStuck == 1) {
     char message[64];
-    snprintf(message, sizeof(message), "Stuck in %s, rebooting", STAGE_NAMES[stage]);
+    snprintf(message, sizeof(message), "Stuck in %s", STAGE_NAMES[stage]);
     warn(message);
     notify(find(logChar));  // the stuck loop will not flush it, so send it from here
+    // The retention register survives the reset: the stage in the low bits, the count above.
     sd_power_gpregret_clr(1, 0xFF);
-    sd_power_gpregret_set(1, stage);
+    sd_power_gpregret_set(1, stage | min(stallReboots + 1, 15) << 4);
   } else if (ticksStuck == 2) {
     Bluefruit.disconnect(Bluefruit.connHandle());
   } else {
@@ -582,11 +660,13 @@ void onStallCheck(TimerHandle_t timer) {
 // After a reset, say why if it was ours. Runs before the radio starts, while the retained
 // register can still be read directly; the stall check left the stuck stage in it.
 void reportLastReset() {
-  uint8_t stuckIn = NRF_POWER->GPREGRET2;
+  uint8_t stuck = NRF_POWER->GPREGRET2;
   NRF_POWER->GPREGRET2 = 0;
-  if (stuckIn != 0) {
+  stallReboots = stuck >> 4;
+  readings.stats[3] = stallReboots;
+  if (stuck != 0) {
     char message[64];
-    snprintf(message, sizeof(message), "Rebooted: was stuck in %s", STAGE_NAMES[stuckIn % STAGE_COUNT]);
+    snprintf(message, sizeof(message), "Stall reboot %d: was stuck in %s", stallReboots, STAGE_NAMES[(stuck & 0xF) % STAGE_COUNT]);
     warn(message);
   } else if (readResetReason() & POWER_RESETREAS_DOG_Msk) {
     warn("Rebooted by the watchdog");
@@ -650,7 +730,13 @@ void setupSensors() {
   if (!bmp280.begin()) {
     warn("BMP280 missing");
   }
-  Wire.setClock(400000);  // every chip supports fast mode I2C; their begin() calls left it at 100 kHz
+  // The sensor libraries leave the bus at 100 kHz, which makes the 14-byte IMU read take
+  // most of the 2.4 ms between samples; 250 kHz makes it a quarter. Not 400 kHz: the bus
+  // also runs to edge pads 19 and 20, the small fingers between the 3V and GND rings, and
+  // a finger resting there adds enough capacitance to corrupt bits at that speed, which
+  // leaves a sensor holding the bus and the board rebooting. (The nRF52840's own 400 kHz
+  // timing is also out of spec, erratum 219.)
+  Wire.setClock(250000);
 }
 
 void setupMic() {
@@ -818,9 +904,30 @@ void showNextLine() {
     case 6: showVector("Gyro:", readings.vectors.gyro); break;
     case 7: showVector("Mag:", readings.vectors.mag); break;
     case 8: showValue("Mic: ", readings.mic, 0, " dB"); break;
+    case 9: showPlugins(); break;
+    case 10: showTouch(); break;
   }
   pushLine(readingsTop + line * 16);
-  line = (line + 1) % 9;
+  line = (line + 1) % 11;
+}
+
+void showTouch() {
+  lineCanvas.print("Touch: ");
+  for (int i = 0; i < 3; i++) {
+    lineCanvas.print(i ? " " : "");
+    lineCanvas.print((int)readings.touch[i]);
+  }
+}
+
+// The plug-in sensors answering right now, by name.
+void showPlugins() {
+  lineCanvas.print("Plug:");
+  for (Sensor &plugin : plugins) {
+    if (plugin.answering) {
+      lineCanvas.print(" ");
+      lineCanvas.print(plugin.name);
+    }
+  }
 }
 
 void startLine() {

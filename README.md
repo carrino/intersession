@@ -39,6 +39,15 @@ You should now see **Adafruit CLUE** under Tools > Board > Adafruit nRF52 Boards
    once per board. The Recalibrate button on the page starts over. The holds are in the air
    because most tables have steel in them, which throws the magnetometer off; the set-down
    step only uses the gyro, so the table does not matter there.
+6. Plug a STEMMA QT sensor into the port on the bottom edge. Within half a second the
+   screen's `Plug:` line and the page's plug-ins row name it, and the log says when it was
+   plugged in or pulled out. Plug it in with the board off when you can: pushing the
+   connector in while a sensor is being read can jam the I2C bus, and the board then spends
+   two seconds noticing and rebooting itself. Reading the sensor is the next step and takes
+   that sensor's library.
+7. The three ring pads P0, P1 and P2 on the bottom edge are touch pads. The screen's
+   `Touch:` line and the page's touch row count higher while a finger is on one, or on
+   anything conductive clipped to it, such as the conductive fabric on an alligator clip.
 
 ## When something goes wrong
 
@@ -56,6 +65,13 @@ You should now see **Adafruit CLUE** under Tools > Board > Adafruit nRF52 Boards
   keep their power. **Unplug the USB cable for ten seconds** and plug it back in. The
   current sketch clears the bus by hand at startup and reboots itself within a couple of
   seconds if the loop ever stops, logging what it was doing, so this only bites old builds.
+- **The screen says `Stall reboot N: was stuck in the IMU` in red:** a sensor read never
+  finished and the board rebooted itself. The I2C bus runs out to the two small gold
+  fingers between the 3V and GND rings on the bottom edge, so a finger resting there, or
+  a STEMMA QT connector going in or out mid-read, can jam it. A strip of electrical or
+  Kapton tape over the small fingers, leaving the five big rings free, stops the finger
+  case. The last value in the page's stats row counts these reboots since power-on, so
+  you can tell a one-off from a pattern.
 - **"Adafruit CLUE" is not in the board list:** step 3 of the setup did not finish.
 - **A `.h` file is not found:** step 4 did not finish, or the sketch was opened from a copy
   of the `.ino` file on its own instead of from its folder.
