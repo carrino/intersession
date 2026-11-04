@@ -133,8 +133,9 @@ struct Readings {
   float quaternion[4];  // w, x, y, z
   Vectors vectors;
   float magFit[5];      // offset x, y, z, field strength (microtesla), faces seen as bits +x -x +y -y +z -z
-  float stats[3];       // IMU samples fused per second; degrees between where we think down is and true
-                        // down; updates subscribers missed because the radio was busy
+  float stats[4];       // IMU samples fused per second; degrees between where we think down is and true
+                        // down; updates subscribers missed because the radio was busy; stall reboots
+                        // since power-on
   float temperature;    // C
   float pressure;       // hPa
   float humidity;       // percent
@@ -181,6 +182,7 @@ const char *STAGE_NAMES[STAGE_COUNT] = {"nothing", "BLE", "the IMU", "the magnet
                                         "the environment sensors", "the screen"};
 volatile Stage stage = STAGE_NONE;
 volatile uint32_t loopAliveMs = 0;  // when loop() last checked in
+int stallReboots = 0;               // since power-on; a reset keeps it in the retention register
 SoftwareTimer stallTimer;
 
 char bleName[16];     // CLUE-xxxx, shown with the connection state on the top line
@@ -633,17 +635,21 @@ void setupDisplay() {
 void onStallCheck(TimerHandle_t timer) {
   static int ticksStuck = 0;
   if (millis() - loopAliveMs < 1000) {
+    if (ticksStuck) {
+      note("Loop running again");  // slow, then, not stuck
+    }
     ticksStuck = 0;
     return;
   }
   ticksStuck++;
   if (ticksStuck == 1) {
     char message[64];
-    snprintf(message, sizeof(message), "Stuck in %s, rebooting", STAGE_NAMES[stage]);
+    snprintf(message, sizeof(message), "Stuck in %s", STAGE_NAMES[stage]);
     warn(message);
     notify(find(logChar));  // the stuck loop will not flush it, so send it from here
+    // The retention register survives the reset: the stage in the low bits, the count above.
     sd_power_gpregret_clr(1, 0xFF);
-    sd_power_gpregret_set(1, stage);
+    sd_power_gpregret_set(1, stage | min(stallReboots + 1, 15) << 4);
   } else if (ticksStuck == 2) {
     Bluefruit.disconnect(Bluefruit.connHandle());
   } else {
@@ -654,11 +660,13 @@ void onStallCheck(TimerHandle_t timer) {
 // After a reset, say why if it was ours. Runs before the radio starts, while the retained
 // register can still be read directly; the stall check left the stuck stage in it.
 void reportLastReset() {
-  uint8_t stuckIn = NRF_POWER->GPREGRET2;
+  uint8_t stuck = NRF_POWER->GPREGRET2;
   NRF_POWER->GPREGRET2 = 0;
-  if (stuckIn != 0) {
+  stallReboots = stuck >> 4;
+  readings.stats[3] = stallReboots;
+  if (stuck != 0) {
     char message[64];
-    snprintf(message, sizeof(message), "Rebooted: was stuck in %s", STAGE_NAMES[stuckIn % STAGE_COUNT]);
+    snprintf(message, sizeof(message), "Stall reboot %d: was stuck in %s", stallReboots, STAGE_NAMES[(stuck & 0xF) % STAGE_COUNT]);
     warn(message);
   } else if (readResetReason() & POWER_RESETREAS_DOG_Msk) {
     warn("Rebooted by the watchdog");
