@@ -730,7 +730,13 @@ void setupSensors() {
   if (!bmp280.begin()) {
     warn("BMP280 missing");
   }
-  Wire.setClock(400000);  // every chip supports fast mode I2C; their begin() calls left it at 100 kHz
+  // The sensor libraries leave the bus at 100 kHz, which makes the 14-byte IMU read take
+  // most of the 2.4 ms between samples; 250 kHz makes it a quarter. Not 400 kHz: the bus
+  // also runs to edge pads 19 and 20, the small fingers between the 3V and GND rings, and
+  // a finger resting there adds enough capacitance to corrupt bits at that speed, which
+  // leaves a sensor holding the bus and the board rebooting. (The nRF52840's own 400 kHz
+  // timing is also out of spec, erratum 219.)
+  Wire.setClock(250000);
 }
 
 void setupMic() {

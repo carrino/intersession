@@ -66,9 +66,12 @@ You should now see **Adafruit CLUE** under Tools > Board > Adafruit nRF52 Boards
   current sketch clears the bus by hand at startup and reboots itself within a couple of
   seconds if the loop ever stops, logging what it was doing, so this only bites old builds.
 - **The screen says `Stall reboot N: was stuck in the IMU` in red:** a sensor read never
-  finished, most often because a STEMMA QT connector went in or out mid-read, and the
-  board rebooted itself. The last value in the page's stats row counts these since
-  power-on, so you can tell a one-off from a pattern.
+  finished and the board rebooted itself. The I2C bus runs out to the two small gold
+  fingers between the 3V and GND rings on the bottom edge, so a finger resting there, or
+  a STEMMA QT connector going in or out mid-read, can jam it. A strip of electrical or
+  Kapton tape over the small fingers, leaving the five big rings free, stops the finger
+  case. The last value in the page's stats row counts these reboots since power-on, so
+  you can tell a one-off from a pattern.
 - **"Adafruit CLUE" is not in the board list:** step 3 of the setup did not finish.
 - **A `.h` file is not found:** step 4 did not finish, or the sketch was opened from a copy
   of the `.ino` file on its own instead of from its folder.
