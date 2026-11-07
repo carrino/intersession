@@ -46,7 +46,7 @@ it sits in.
 | PA1010D | GPS | 0x10 | [PA1010D.pdf](PA1010D.pdf) | [Adafruit](https://cdn-learn.adafruit.com/assets/assets/000/084/295/original/CD_PA1010D_Datasheet_v.03.pdf) |
 | SCD-43 | CO2, temperature and humidity (the SCD4x family) | 0x62 | [SCD4x.pdf](SCD4x.pdf) | [Sensirion](https://sensirion.com/media/documents/48C4B7FB/64C134E7/Sensirion_SCD4x_Datasheet.pdf) |
 | MLX90632 | Non-contact temperature | 0x3A | [MLX90632.pdf](MLX90632.pdf) | [Melexis](https://www.melexis.com/-/media/files/documents/datasheets/mlx90632-datasheet-melexis.pdf) |
-| LTR-390UV | UV and ambient light | 0x53 | not here yet | [Lite-On](https://optoelectronics.liteon.com/upload/download/DS86-2015-0004/LTR-390UV_Final_%20DS_V1%201.pdf), which refuses scripted downloads: save it from a browser |
+| LTR-390UV | UV and ambient light | 0x53 | [LTR-390UV.pdf](LTR-390UV.pdf) | [Lite-On](https://optoelectronics.liteon.com/upload/download/DS86-2015-0004/LTR-390UV_Final_%20DS_V1%201.pdf) |
 
 The MPR121 and DRV2605L share address 0x5A, so a project with both moves the MPR121 to
 0x5B with its ADDR jumper.
