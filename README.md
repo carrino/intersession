@@ -4,6 +4,9 @@ Code for the Adafruit CLUE board. Each day lives in its own folder with a sketch
 after the folder, for example `day1/day1.ino`. Open that file in the Arduino IDE and the
 other files in the folder come along with it.
 
+The [`datasheets`](datasheets/README.md) folder has the CLUE's schematic and pinout and the
+datasheet for every sensor on it or in the parts order.
+
 ## One-time setup
 
 1. Install [Arduino IDE 2](https://www.arduino.cc/en/software).
