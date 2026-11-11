@@ -4,6 +4,9 @@ Code for the Adafruit CLUE board. Each day lives in its own folder with a sketch
 after the folder, for example `day1/day1.ino`. Open that file in the Arduino IDE and the
 other files in the folder come along with it.
 
+The [`datasheets`](datasheets/README.md) folder has the CLUE's schematic and pinout and the
+datasheet for every sensor on it or in the parts order.
+
 ## One-time setup
 
 1. Install [Arduino IDE 2](https://www.arduino.cc/en/software).
@@ -31,14 +34,25 @@ You should now see **Adafruit CLUE** under Tools > Board > Adafruit nRF52 Boards
    name, `CLUE-xxxx`.
 4. Open the day's web page, for example `day1/orientation.html`, in Chrome or Edge. Only
    those browsers have Web Bluetooth. Click Connect and pick your board's name.
-5. A board that has never been calibrated shows a calibration screen on the page. Hold the
-   board in the air, away from the table, with each of its six faces toward the floor in
-   turn: a face goes yellow when it is close, fills green while you hold still, and locks in
-   after a second. Then set the board down on anything and leave it alone for a second. The
-   page works out each sensor's offset and the board keeps them in its flash, so this is
-   once per board. The Recalibrate button on the page starts over. The holds are in the air
-   because most tables have steel in them, which throws the magnetometer off; the set-down
-   step only uses the gyro, so the table does not matter there.
+5. A board that has never been calibrated shows a calibration screen on the page. First
+   type a name in its box and press Enter: the board then shows up as `CLUE-<name>`, so
+   everyone can find their own. Then hold the board in the air, away from the table, with
+   each of its six faces toward the floor in turn: a face goes yellow when it is within 10
+   degrees, fills green while you hold still, and locks in after a second and a half. Then
+   set the board down on anything and leave it alone. Click a card to redo that step. The
+   page works out each sensor's offset and the board keeps them and its name in its flash,
+   so this is once per board. The Recalibrate button on the page starts over. The holds are
+   in the air because most tables have steel in them, which throws the magnetometer off;
+   the set-down step only uses the gyro, so the table does not matter there.
+6. Plug a STEMMA QT sensor into the port on the bottom edge. Within half a second the
+   screen's `Plug:` line and the page's plug-ins row name it, and the log says when it was
+   plugged in or pulled out. Plug it in with the board off when you can: pushing the
+   connector in while a sensor is being read can jam the I2C bus, and the board then spends
+   two seconds noticing and rebooting itself. Reading the sensor is the next step and takes
+   that sensor's library.
+7. The three ring pads P0, P1 and P2 on the bottom edge are touch pads. The screen's
+   `Touch:` line and the page's touch row count higher while a finger is on one, or on
+   anything conductive clipped to it, such as the conductive fabric on an alligator clip.
 
 ## When something goes wrong
 
@@ -56,6 +70,15 @@ You should now see **Adafruit CLUE** under Tools > Board > Adafruit nRF52 Boards
   keep their power. **Unplug the USB cable for ten seconds** and plug it back in. The
   current sketch clears the bus by hand at startup and reboots itself within a couple of
   seconds if the loop ever stops, logging what it was doing, so this only bites old builds.
+- **The screen says `Stall reboot N: was stuck in the IMU` in red:** a sensor read never
+  finished and the board rebooted itself. The I2C bus runs out to the two small gold
+  fingers between the 3V and GND rings on the bottom edge, where a finger adds
+  capacitance to it. The sketch runs the bus at 250 kHz, slow enough that a finger there
+  no longer jams it; at 400 kHz it did. A STEMMA QT connector going in or out mid-read
+  can still jam it, and if a board keeps doing this anyway, a strip of Kapton tape over
+  the small fingers, leaving the five big rings free, takes fingers out of it. The last
+  value in the page's stats row counts these reboots since power-on, so you can tell a
+  one-off from a pattern.
 - **"Adafruit CLUE" is not in the board list:** step 3 of the setup did not finish.
 - **A `.h` file is not found:** step 4 did not finish, or the sketch was opened from a copy
   of the `.ino` file on its own instead of from its folder.
