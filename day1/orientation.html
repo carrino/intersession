@@ -18,7 +18,7 @@
     .mag { color: #f0f; }
     .accel { color: #0f0; }
     #faces { display: flex; gap: 0.5em; font-family: monospace; }
-    .face { width: 9em; padding: 0.4em; border: 1px solid #555; border-radius: 4px; text-align: center; }
+    .face { width: 9em; padding: 0.4em; border: 1px solid #555; border-radius: 4px; text-align: center; cursor: pointer; }
     .face span { display: block; min-height: 1.2em; font-size: 0.9em; }
   </style>
 </head>
@@ -29,9 +29,12 @@
     <label>Back LED <input type="color" id="pixel" value="#000000" disabled></label>
     <button id="recalibrate" hidden>Recalibrate</button>
     <div id="calibration" hidden>
+      <p><label>Name this board, so it is easy to find: CLUE-<input id="boardName" maxlength="12" size="12"
+        pattern="[A-Za-z0-9 _\-]*" placeholder="your name"></label> <span id="nameStatus"></span></p>
       <p>Not calibrated. Hold the board in the air, away from the desk, with each face toward the floor in turn.
-        A face goes yellow when it is close, fills green while you hold still, and locks in after a second.
-        Then set the board down on anything and leave it alone for a second: that measures the gyro.</p>
+        A face goes yellow when it is close, fills green while you hold still, and locks in after a second and a half.
+        Then set the board down on anything and leave it alone: that measures the gyro.
+        Click a card to clear it and do that one again.</p>
       <div id="faces"></div>
     </div>
     <table id="data"></table>
@@ -59,6 +62,7 @@
     const PIXEL_UUID = 'c10e000d-5a7e-4a6b-9f3e-0b6f2d9a1c01';  // writable: red, green, blue bytes
     const LOG_UUID = 'c10e0010-5a7e-4a6b-9f3e-0b6f2d9a1c01';    // text: every note() and warn() on the board
     const CALIBRATION_UUID = 'c10e0011-5a7e-4a6b-9f3e-0b6f2d9a1c01';  // read/write: accel, gyro and mag offsets, 9 floats
+    const NAME_UUID = 'c10e0014-5a7e-4a6b-9f3e-0b6f2d9a1c01';  // read/write: the board's name as text, up to 12 characters
     const CHARACTERISTICS = [
       { uuid: 'c10e0002-5a7e-4a6b-9f3e-0b6f2d9a1c01', fields: [['quaternion', 4, 'w x y z']] },
       { uuid: 'c10e0003-5a7e-4a6b-9f3e-0b6f2d9a1c01', fields: [['accel', 3, 'm/s²'], ['gyro', 3, 'rad/s'], ['mag', 3, 'µT'],
@@ -171,6 +175,7 @@
     const status = document.getElementById('status');
     const table = document.getElementById('data');
     const pixelInput = document.getElementById('pixel');
+    const nameInput = document.getElementById('boardName');
 
     // Everything that happens on the Bluetooth side is logged to the browser console
     // (F12), with the time since the page loaded, so a stall can be traced.
@@ -230,6 +235,10 @@
       const pixel = await service.getCharacteristic(PIXEL_UUID);
       pixelInput.oninput = () => sendPixel(pixel);
       pixelInput.disabled = false;
+
+      const name = await service.getCharacteristic(NAME_UUID);
+      nameInput.value = new TextDecoder().decode(await name.readValue());
+      nameInput.onchange = () => sendName(name);
 
       calibrationChr = await service.getCharacteristic(CALIBRATION_UUID);
       const stored = await calibrationChr.readValue();
@@ -349,40 +358,44 @@
       { name: '+z down', axis: [0, 0, 1] }, { name: '-z down', axis: [0, 0, -1] },
       { name: 'set down' },
     ];
-    const HOLD_SAMPLES = 10;    // one second of the 10 Hz motion packets
+    const HOLD_SAMPLES = 15;    // a second and a half of the 10 Hz motion packets
     const HAND_WOBBLE = 0.5;    // m/s²: how far the accel may wander in a hand-held second, about 3°
     const RESTING_ACCEL = 0.1;  // m/s² and
     const RESTING_GYRO = 0.02;  // rad/s: how far the readings may wander in a set-down second
-    const POINTING_DOT = Math.cos(15 * Math.PI / 180);  // how close to straight down a face must be
+    const POINTING_DOT = Math.cos(10 * Math.PI / 180);  // a face must be within 10 degrees of straight down
     const calibrationPanel = document.getElementById('calibration');
     const recalibrateButton = document.getElementById('recalibrate');
-    const cards = STEPS.map(step => {
+    const cards = STEPS.map((step, i) => {
       const card = document.createElement('div');
       card.className = 'face';
       card.innerHTML = `<b>${step.name}</b><span></span>`;
+      card.onclick = () => clearStep(i);
       document.getElementById('faces').appendChild(card);
       return card;
     });
     let calibrationChr = null;
     let held = [];    // per step, the still readings collected so far
-    let locked = [];  // per step, the average reading once a second of them was held
+    let locked = [];  // per step, the average reading once the hold was long enough
     let last = null;  // the previous packet, which a new hold is judged still against
 
     function showCalibrationScreen(show) {
-      held = STEPS.map(() => []);
-      locked = STEPS.map(() => null);
-      cards.forEach(card => {
-        card.style.background = '';
-        card.lastChild.textContent = '';
-      });
+      STEPS.forEach((_, i) => clearStep(i));
       calibrationPanel.hidden = !show;
       recalibrateButton.hidden = show;
+    }
+
+    // Forgets one step's reading so it can be done again.
+    function clearStep(i) {
+      held[i] = [];
+      locked[i] = null;
+      cards[i].style.background = '';
+      cards[i].lastChild.textContent = '';
     }
 
     // Runs on each motion packet while the calibration screen is up. The accelerometer
     // reads the push holding the board up, so the face toward the floor reads minus g on
     // its axis. Still means the readings stay near the first reading of the hold, which
-    // does not depend on the gyro's own offset; moving starts that step's second over.
+    // does not depend on the gyro's own offset; moving starts that step's hold over.
     function calibrate() {
       const { accel, gyro, mag } = latest;
       STEPS.forEach((step, i) => {
@@ -401,7 +414,7 @@
             ? locked[i].accel.map(v => v.toFixed(2)).join(' ')
             : locked[i].gyro.map(v => v.toFixed(3)).join(' ');
         }
-        const green = 100 * held[i].length / HOLD_SAMPLES;  // the sweep: green from the left as the second fills
+        const green = 100 * held[i].length / HOLD_SAMPLES;  // the sweep: green from the left as the hold fills
         cards[i].style.background = pointing ? `linear-gradient(90deg, #060 ${green}%, #660 ${green}%)` : '';
       });
       last = { accel, gyro };
@@ -466,6 +479,19 @@
         }
       }
       return [0, 1, 2].map(i => m[i][4] / m[i][i]);
+    }
+
+    // Saves the name box on the board, which then advertises as CLUE-<name>. Runs when the
+    // box loses focus or Enter is pressed. Empty goes back to the board's default name.
+    async function sendName(name) {
+      const nameStatus = document.getElementById('nameStatus');
+      if (!nameInput.checkValidity()) {
+        nameStatus.textContent = 'letters, digits, spaces, - and _ only';
+        return;
+      }
+      await name.writeValue(new TextEncoder().encode(nameInput.value));
+      nameStatus.textContent = 'saved';
+      log('named', nameInput.value);
     }
 
     // Writes the color picker's value to the board as three bytes. The picker fires faster

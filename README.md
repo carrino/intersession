@@ -34,14 +34,16 @@ You should now see **Adafruit CLUE** under Tools > Board > Adafruit nRF52 Boards
    name, `CLUE-xxxx`.
 4. Open the day's web page, for example `day1/orientation.html`, in Chrome or Edge. Only
    those browsers have Web Bluetooth. Click Connect and pick your board's name.
-5. A board that has never been calibrated shows a calibration screen on the page. Hold the
-   board in the air, away from the table, with each of its six faces toward the floor in
-   turn: a face goes yellow when it is close, fills green while you hold still, and locks in
-   after a second. Then set the board down on anything and leave it alone for a second. The
-   page works out each sensor's offset and the board keeps them in its flash, so this is
-   once per board. The Recalibrate button on the page starts over. The holds are in the air
-   because most tables have steel in them, which throws the magnetometer off; the set-down
-   step only uses the gyro, so the table does not matter there.
+5. A board that has never been calibrated shows a calibration screen on the page. First
+   type a name in its box and press Enter: the board then shows up as `CLUE-<name>`, so
+   everyone can find their own. Then hold the board in the air, away from the table, with
+   each of its six faces toward the floor in turn: a face goes yellow when it is within 10
+   degrees, fills green while you hold still, and locks in after a second and a half. Then
+   set the board down on anything and leave it alone. Click a card to redo that step. The
+   page works out each sensor's offset and the board keeps them and its name in its flash,
+   so this is once per board. The Recalibrate button on the page starts over. The holds are
+   in the air because most tables have steel in them, which throws the magnetometer off;
+   the set-down step only uses the gyro, so the table does not matter there.
 6. Plug a STEMMA QT sensor into the port on the bottom edge. Within half a second the
    screen's `Plug:` line and the page's plug-ins row name it, and the log says when it was
    plugged in or pulled out. Plug it in with the board off when you can: pushing the

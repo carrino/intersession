@@ -102,6 +102,7 @@ BLECharacteristic logChar("c10e0010-5a7e-4a6b-9f3e-0b6f2d9a1c01");  // text: eve
 BLECharacteristic calibrationChar("c10e0011-5a7e-4a6b-9f3e-0b6f2d9a1c01");  // read/write: the Calibration below
 BLECharacteristic pluginsChar("c10e0012-5a7e-4a6b-9f3e-0b6f2d9a1c01");
 BLECharacteristic touchChar("c10e0013-5a7e-4a6b-9f3e-0b6f2d9a1c01");
+BLECharacteristic nameChar("c10e0014-5a7e-4a6b-9f3e-0b6f2d9a1c01");  // read/write: the board's name, text
 
 // One-time per-axis offsets for this board's sensors, found by the page's calibration
 // screen (hold each face of the board toward the floor, still, for a second) and kept in
@@ -115,6 +116,12 @@ struct Calibration {
 };
 Calibration calibration;
 const char *CALIBRATION_FILE = "/calibration.bin";
+
+// The name a student gives the board on the page, kept in flash: it advertises as
+// CLUE-<name>. Twelve characters is what fits the screen's top line after "CLUE-".
+const int MAX_NAME_LEN = 12;
+char boardName[MAX_NAME_LEN + 1];  // empty until named
+const char *NAME_FILE = "/name.txt";
 
 // The motion readings, sent together in one packet. The NED pair are the raw readings
 // rotated into the world frame by the orientation and averaged there, where gravity and
@@ -185,7 +192,7 @@ volatile uint32_t loopAliveMs = 0;  // when loop() last checked in
 int stallReboots = 0;               // since power-on; a reset keeps it in the retention register
 SoftwareTimer stallTimer;
 
-char bleName[16];     // CLUE-xxxx, shown with the connection state on the top line
+char bleName[24];     // CLUE-<name>, shown on the top line
 bool bleStarted = false;
 int readingsTop = 0;  // screen row where the live readings start, below any warnings
 int imuSamples = 0;   // fused since the last stats update
@@ -230,7 +237,9 @@ void setup() {
 
   setupDisplay();
   reportLastReset();
-  loadCalibration();
+  InternalFS.begin();
+  loadFile(CALIBRATION_FILE, &calibration, sizeof(calibration));
+  loadFile(NAME_FILE, boardName, MAX_NAME_LEN);
   unstickI2cBus();
   setupSensors();
   setupMic();
@@ -585,33 +594,64 @@ bool calibrated() {
   return memcmp(&calibration, &none, sizeof(calibration)) != 0;
 }
 
-void loadCalibration() {
-  InternalFS.begin();
-  Adafruit_LittleFS_Namespace::File file(InternalFS);
-  if (file.open(CALIBRATION_FILE, Adafruit_LittleFS_Namespace::FILE_O_READ)) {
-    file.read(&calibration, sizeof(calibration));
-    file.close();
-  }
-}
-
-void saveCalibration() {
-  InternalFS.remove(CALIBRATION_FILE);  // FILE_O_WRITE appends, so start clean
-  Adafruit_LittleFS_Namespace::File file(InternalFS);
-  if (file.open(CALIBRATION_FILE, Adafruit_LittleFS_Namespace::FILE_O_WRITE)) {
-    file.write((const uint8_t *)&calibration, sizeof(calibration));
-    file.close();
-  }
-}
-
 // Runs when the page writes a Calibration. All zeros means "forget it and start over".
 void onCalibrationWrite(uint16_t connHandle, BLECharacteristic *chr, uint8_t *data, uint16_t len) {
   memcpy(&calibration, data, sizeof(calibration));
   if (calibrated()) {
-    saveCalibration();
+    saveFile(CALIBRATION_FILE, &calibration, sizeof(calibration));
     note("Calibration saved");
   } else {
     InternalFS.remove(CALIBRATION_FILE);
     note("Calibration cleared");
+  }
+}
+
+// Runs when the page writes a name. An empty one goes back to the default.
+void onNameWrite(uint16_t connHandle, BLECharacteristic *chr, uint8_t *data, uint16_t len) {
+  len = min(len, (uint16_t)MAX_NAME_LEN);  // setMaxLen() already refuses longer, but be sure
+  for (int i = 0; i < len; i++) {
+    boardName[i] = isprint(data[i]) ? data[i] : '_';  // nothing that would garble the screen
+  }
+  boardName[len] = '\0';
+  saveFile(NAME_FILE, boardName, len);
+  applyName();
+  char message[64];
+  snprintf(message, sizeof(message), "Renamed %s: scanners see it after this disconnects", bleName);
+  note(message);
+}
+
+// Advertises as CLUE-<name>, or CLUE- and the end of the Bluetooth address until the
+// board has a name. The scan response carries the name, so it is rebuilt too; the board
+// sends it the next time it advertises.
+void applyName() {
+  if (boardName[0] != '\0') {
+    snprintf(bleName, sizeof(bleName), "CLUE-%s", boardName);
+  } else {
+    ble_gap_addr_t addr = Bluefruit.getAddr();
+    snprintf(bleName, sizeof(bleName), "CLUE-%02X%02X", addr.addr[1], addr.addr[0]);
+  }
+  Bluefruit.setName(bleName);
+  Bluefruit.ScanResponse.clearData();
+  Bluefruit.ScanResponse.addName();
+  nameChar.write(boardName);
+}
+
+// Reads up to len bytes of a flash file into data, leaving data as it was if there is none.
+void loadFile(const char *path, void *data, int len) {
+  Adafruit_LittleFS_Namespace::File file(InternalFS);
+  if (file.open(path, Adafruit_LittleFS_Namespace::FILE_O_READ)) {
+    file.read(data, len);
+    file.close();
+  }
+}
+
+// Replaces a flash file. FILE_O_WRITE appends, so the old one goes first.
+void saveFile(const char *path, const void *data, int len) {
+  InternalFS.remove(path);
+  Adafruit_LittleFS_Namespace::File file(InternalFS);
+  if (file.open(path, Adafruit_LittleFS_Namespace::FILE_O_WRITE)) {
+    file.write((const uint8_t *)data, len);
+    file.close();
   }
 }
 
@@ -764,12 +804,6 @@ void setupBle() {
   Bluefruit.configPrphConn(247, BLE_GAP_EVENT_LENGTH_DEFAULT, 8, 1);
   Bluefruit.begin();
 
-  // Give each CLUE its own name so a room full of them is easy to tell apart.
-  ble_gap_addr_t addr = Bluefruit.getAddr();
-  snprintf(bleName, sizeof(bleName), "CLUE-%02X%02X", addr.addr[1], addr.addr[0]);
-  Bluefruit.setName(bleName);
-  showBleStatus();
-
   sensorService.begin();  // characteristics join the most recently begun service
   for (Published &p : published) {
     beginNotifyChar(p.chr, p.len);
@@ -786,11 +820,19 @@ void setupBle() {
   calibrationChar.begin();
   calibrationChar.write(&calibration, sizeof(calibration));
 
+  nameChar.setProperties(CHR_PROPS_READ | CHR_PROPS_WRITE);
+  nameChar.setMaxLen(MAX_NAME_LEN);
+  nameChar.setWriteCallback(onNameWrite);
+  nameChar.begin();
+
+  // Give each CLUE its own name so a room full of them is easy to tell apart.
+  applyName();
+  showBleStatus();
+
   // Our 128-bit UUID nearly fills the advertising packet, so the name goes in the scan
-  // response, which scanners ask for right after.
+  // response, which scanners ask for right after; applyName() put it there.
   Bluefruit.Advertising.addFlags(BLE_GAP_ADV_FLAGS_LE_ONLY_GENERAL_DISC_MODE);
   Bluefruit.Advertising.addService(sensorService);
-  Bluefruit.ScanResponse.addName();
   Bluefruit.Advertising.restartOnDisconnect(true);
   Bluefruit.Advertising.setInterval(32, 32);  // every 20 ms, always, so reconnecting is quick
   Bluefruit.Advertising.start(0);             // 0 = keep advertising until connected
@@ -884,10 +926,12 @@ uint32_t notify(Published &p) {
 // the loop for tens of milliseconds a line. Each line is drawn into lineCanvas instead
 // and pushed as one block, which takes about two, and only one line is drawn per tick.
 
+// The board's name, yellow while waiting for a page or phone and green once one connects.
+// A twelve-letter name leaves no room on the line for the words.
 void showBleStatus() {
   startLine();
+  lineCanvas.setTextColor(Bluefruit.connected() ? ST77XX_GREEN : ST77XX_YELLOW);
   lineCanvas.print(bleName);
-  lineCanvas.print(Bluefruit.connected() ? " connected" : " waiting");
   pushLine(0);
 }
 

@@ -5,7 +5,7 @@ stays home. Check with the maker space ahead of time about what they have (botto
 
 ## Boards and parts
 
-- CLUE boards, one per student plus two spares.
+- All eight CLUE boards: one each for the four students and me, three spares.
 - The Adafruit order: sensors, STEMMA QT cables, battery holders, encoders, cap touch,
   haptic drivers and motor discs, alligator clips, conductive fabric, flux pen.
 - Micro-USB data cables, one per student plus spares, each one tested and marked. A
