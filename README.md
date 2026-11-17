@@ -50,7 +50,12 @@ You should now see **Adafruit CLUE** under Tools > Board > Adafruit nRF52 Boards
    connector in while a sensor is being read can jam the I2C bus, and the board then spends
    two seconds noticing and rebooting itself. Reading the sensor is the next step and takes
    that sensor's library.
-7. The three ring pads P0, P1 and P2 on the bottom edge are touch pads. The screen's
+7. Tap the board, tap it twice, or walk with it: the page's tap, double tap and steps rows
+   count them and say how long ago the last one was. Drop it onto something soft and the
+   fall row counts that. The motion chip spots these itself; it needs the LSM6DS3TR-C of
+   the CLUE's 2025 revision, and the board's "Started with the ..." log line says which
+   chip it has.
+8. The three ring pads P0, P1 and P2 on the bottom edge are touch pads. The screen's
    `Touch:` line and the page's touch row count higher while a finger is on one, or on
    anything conductive clipped to it, such as the conductive fabric on an alligator clip.
 

@@ -78,6 +78,8 @@
       { uuid: 'c10e000f-5a7e-4a6b-9f3e-0b6f2d9a1c01', fields: [['stats', 4, 'IMU samples/s, tilt error °, missed updates, stall reboots']] },
       { uuid: 'c10e0012-5a7e-4a6b-9f3e-0b6f2d9a1c01', fields: [['plug-ins', 1, 'STEMMA QT sensors answering']] },
       { uuid: 'c10e0013-5a7e-4a6b-9f3e-0b6f2d9a1c01', fields: [['touch', 3, 'P0 P1 P2 pad counts, higher when touched']] },
+      { uuid: 'c10e0015-5a7e-4a6b-9f3e-0b6f2d9a1c01', fields: [['tap', 2, 'count, then the last one'], ['double tap', 2, 'count, then the last one'],
+                                                               ['fall', 2, 'count, then the last one'], ['steps', 2, 'count, then the last one']] },
     ];
     // The plug-in sensors the board knows, in the order of its bits. Must match day1.ino.
     const PLUGINS = ['VL53L1X', 'AMG8833', 'MPR121/DRV2605', 'ANO encoder', 'PA1010D', 'SCD-43', 'LTR390', 'MLX90632'];
@@ -152,6 +154,7 @@
     resize();
 
     const VECTORS = new Set(['accel', 'gyro', 'mag', 'accel NED', 'mag NED']);  // rows that get a length column
+    const EVENTS = new Set(['tap', 'double tap', 'fall', 'steps']);  // rows of a count and the seconds since the last one
     const latest = {};  // field name -> most recent values
     const hz = {};      // field name -> packets received per second, for debugging the link
     const counts = {};
@@ -308,6 +311,10 @@
         if (name === 'color' && values.length) {
           cells[4] = colorSwatch(values);
         }
+        if (EVENTS.has(name) && values.length) {
+          cells[0] = String(values[0]).padStart(8);
+          cells[1] = values[1] < 0 ? 'none yet' : `last ${ago(values[1])}`;
+        }
         while (cells.length < 5) {
           cells.push('');  // pad so the unit and rate columns line up across rows
         }
@@ -336,6 +343,20 @@
       const scale = 255 / Math.max(r, g, b, 1);
       return `<span style="display:inline-block; width:1.2em; height:1.2em; vertical-align:middle;
         background:rgb(${r * scale}, ${g * scale}, ${b * scale})"></span>`;
+    }
+
+    // A number of seconds as people say it: just now, 40 s ago, 2 min ago, 3 h ago.
+    function ago(seconds) {
+      if (seconds < 2) {
+        return 'just now';
+      }
+      if (seconds < 60) {
+        return `${Math.round(seconds)} s ago`;
+      }
+      if (seconds < 3600) {
+        return `${Math.floor(seconds / 60)} min ago`;
+      }
+      return `${Math.floor(seconds / 3600)} h ago`;
     }
 
     // The mag fit's last value is a bit per face the board has pointed at the floor.

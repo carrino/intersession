@@ -23,7 +23,8 @@ one sensor from the menu in [`FRIDAY.md`](FRIDAY.md).
 | Gesture clicker | Swipe over the board to change slides on a laptop, as a Bluetooth keyboard | Gesture sensor, Bluetooth | Tilt to point |
 | Tilt game controller | Tilt the CLUE to steer a ball through a maze on a web page | Day 1's orientation, a browser game | Two players |
 | Reaction game | Buttons and screen: who presses first | Buttons, screen, speaker | Leaderboard on the page |
-| Step counter | Counts steps from the bounce in each stride | Accelerometer | Steps per minute, distance |
+| Step counter | The motion chip counts steps itself; write your own detector and compare | Accelerometer | Steps per minute, distance |
+| Tap commands | Tap, double tap and drop do different things | The motion chip's tap and fall detectors | A secret knock |
 
 ## With one sensor from the menu
 
@@ -31,7 +32,6 @@ one sensor from the menu in [`FRIDAY.md`](FRIDAY.md).
 | --- | --- | --- | --- |
 | Theremin | Hand distance sets the pitch | VL53L1X | Second hand controls volume through tilt |
 | Parking sensor | Beeps faster as something gets closer | VL53L1X | Distance on the screen |
-| Heat vision | An 8×8 heat picture on the screen | AMG8833 | Spot a person, or a warm laptop vent |
 | Fruit piano | Twelve keys made of bananas, foil or pencil drawings | MPR121 | Record and play back |
 | Buzzing compass | Buzzes when facing north; wear it | DRV2605L and motor | Buzz toward a saved spot |
 | Silent pager | A phone writes a characteristic and the board buzzes | DRV2605L and motor | Patterns that mean different things |

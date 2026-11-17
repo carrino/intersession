@@ -65,12 +65,12 @@ and most of the time building something of their own.
 
 ## The sensor menu
 
-Prices are from the cart as it was built; check them before ordering.
+Prices are from the cart as it was built; check them before ordering. The AMG8833 thermal
+camera is out of stock, so it is off the list.
 
 | Sensor | What it does | A project | Price |
 | --- | --- | --- | --- |
 | VL53L1X | Distance, 3 cm to 4 m, by timing light | Theremin, parking sensor, people counter | $14.95 |
-| AMG8833 | 8×8 thermal camera | Heat vision on the CLUE's screen | $44.95 |
 | MPR121 | 12 capacitive touch inputs | Fruit piano, touch keyboard | $6.95 |
 | DRV2605L + motor disc | Haptic buzzes, 100+ built-in effects | Buzzing compass, silent alarm | $7.95 + $1.95 |
 | ANO encoder | Dial with five buttons | Menus, a game controller | $13.95 |
