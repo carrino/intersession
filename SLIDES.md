@@ -1,9 +1,9 @@
 # Slide topics: brainstorm
 
-A working list to drill down with the class on Friday: which topics they want, and which
-plug-in sensors to order. Each topic has the idea in one line, what to cover, a demo, often
-a story from building day 1, and a question to put to the class. The pinout, schematic and
-every datasheet are in [`datasheets/`](datasheets/README.md).
+A working list to drill down with the class on Friday: which topics they want. Each topic
+has the idea in one line, what to cover, a demo, often a story from building day 1, and a
+question to put to the class. The pinout, schematic and every datasheet are in
+[`datasheets/`](datasheets/README.md).
 
 ## Lecture plan
 
@@ -301,24 +301,7 @@ Bigger topics that deserve their own session, or that fit into project time:
 - Sound: PDM microphones, decibels, and frequency analysis.
 - Version control: this repository, and why every change is a commit.
 
-# For Friday: the sensor menu
+# For Friday
 
-Prices are from the cart as it was built; check them before ordering. Ask each student
-what they would build, then order enough that two people can use the popular ones.
-
-| Sensor | What it does | A project | Price |
-| --- | --- | --- | --- |
-| VL53L1X | Distance, 3 cm to 4 m, by timing light | Theremin, parking sensor, people counter | $14.95 |
-| AMG8833 | 8×8 thermal camera | Heat vision on the CLUE's screen | $44.95 |
-| MPR121 | 12 capacitive touch inputs | Fruit piano, touch keyboard | $6.95 |
-| DRV2605L + motor disc | Haptic buzzes, 100+ built-in effects | Buzzing compass, silent alarm | $7.95 + $1.95 |
-| ANO encoder | Dial with five buttons | Menus, a game controller | $13.95 |
-| PA1010D | GPS | Track a walk; needs a window or outdoors | $29.95 |
-| SCD-43 | True CO2, temperature, humidity | Room air monitor that says "open a window" | $49.95 |
-| LTR390 | UV and light | Sunburn meter | $4.95 |
-| MLX90632 | Non-contact temperature | Point-and-shoot thermometer | $17.50 |
-| Micro servo | Moves something, on pads 0 to 2 | A sensor that points or waves | not in the cart yet |
-| NeoPixel strip | Addressable color LEDs on pad 0 | Light bar, level meter | not in the cart yet |
-
-**Ask the class:** what would you build in a week? Which of the topics above sound
-interesting? Who has written code before, and in what?
+The talking points and the sensor menu for the first meeting are in
+[`FRIDAY.md`](FRIDAY.md); the reading list for the break is [`READING.md`](READING.md).
