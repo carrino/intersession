@@ -107,6 +107,8 @@ a stuck I2C bus at startup we drive SCL in open-drain mode and clock it nine tim
 
 - Never connect 3V straight to GND; the regulator and the battery both object.
 - Batteries in the holder the right way round; the holder has a switch, use it.
+- LiPo batteries: never puncture, bend or short them, and charge them only with a LiPo
+  charger, which the CLUE is not.
 - The iron: always back in its stand, hold by the handle, and wash hands after handling
   solder. Lead-free still smokes; let the flux fumes blow away.
 - Safety glasses for clipping leads, which fly.

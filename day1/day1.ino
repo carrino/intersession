@@ -47,18 +47,20 @@ Sensor sensors[] = {
   {"APDS9960", 0x39, true}, {"LSM6DS", 0x6A, true}, {"LIS3MDL", 0x1C, true}, {"SHT30", 0x44, true}, {"BMP280", 0x77, true},
 };
 
-// STEMMA QT sensors a student may plug into the port on the bottom edge, known by their
-// I2C address. Each is a bit of readings.plugins, in this order. The MPR121 and the
-// DRV2605 both answer at 0x5A, so the address alone cannot tell those two apart.
+// STEMMA QT boards from the class order that a student may plug into the port on the
+// bottom edge, known by their I2C address. Each is a bit of readings.plugins, in this
+// order. The MPR121 and the DRV2605 both answer at 0x5A, so the address alone cannot tell
+// those two apart.
 Sensor plugins[] = {
   {"VL53L1X", 0x29, false},         // distance
-  {"AMG8833", 0x69, false},         // thermal camera
+  {"NeoDriver", 0x60, false},       // NeoPixel strip driver
   {"MPR121/DRV2605", 0x5A, false},  // touch pads / haptic motor
   {"ANO encoder", 0x49, false},     // dial with buttons
   {"PA1010D", 0x10, false},         // GPS
   {"SCD-43", 0x62, false},          // CO2
   {"LTR390", 0x53, false},          // UV
   {"MLX90632", 0x3A, false},        // non-contact temperature
+  {"IS31FL3741", 0x30, false},      // 13x9 RGB LED matrix
 };
 const int SHT30_ADDRESS = 0x44;
 

@@ -28,10 +28,8 @@ and most of the time building something of their own.
   need nothing but the CLUE.
 - Each student leaves with one or two ideas to think about over the break, sharpened with
   the questions at the end of that file.
-- Walk the sensor menu below. Each student picks a first and second choice.
-- Tally, then settle quantities so the popular sensors can be shared by two.
-- Order soon: holiday shipping is slow, and two of the cable lines in the cart were short
-  on stock.
+- Walk the parts list below. Each student picks a first and second choice. There are one
+  to three of each, so tally the picks and plan to share the popular ones.
 
 ## Ask about topics
 
@@ -63,23 +61,38 @@ and most of the time building something of their own.
 - The install homework, due before winter break: the setup in the README, then open
   `day1/day1.ino` and press Verify. If it compiles, the laptop is ready; no board needed.
 
-## The sensor menu
+## The parts list
 
-Prices are from the cart as it was built; check them before ordering. The AMG8833 thermal
-camera is out of stock, so it is off the list.
+Prices are from the order. The AMG8833 thermal camera was out of stock, so it is not here.
 
-| Sensor | What it does | A project | Price |
-| --- | --- | --- | --- |
-| VL53L1X | Distance, 3 cm to 4 m, by timing light | Theremin, parking sensor, people counter | $14.95 |
-| MPR121 | 12 capacitive touch inputs | Fruit piano, touch keyboard | $6.95 |
-| DRV2605L + motor disc | Haptic buzzes, 100+ built-in effects | Buzzing compass, silent alarm | $7.95 + $1.95 |
-| ANO encoder | Dial with five buttons | Menus, a game controller | $13.95 |
-| PA1010D | GPS | Track a walk; needs a window or outdoors | $29.95 |
-| SCD-43 | True CO2, temperature, humidity | Room air monitor that says "open a window" | $49.95 |
-| LTR390 | UV and light | Sunburn meter | $4.95 |
-| MLX90632 | Non-contact temperature | Point-and-shoot thermometer | $17.50 |
-| Micro servo | Moves something, on pads 0 to 2 | A sensor that points or waves | not in the cart yet |
-| NeoPixel strip | Addressable color LEDs on pad 0 | Light bar, level meter | not in the cart yet |
+**Sensors and inputs**
+
+| Part | What it does | A project | Qty | Price |
+| --- | --- | --- | --- | --- |
+| VL53L1X | Distance, 3 cm to 4 m, by timing light | Theremin, parking sensor | 1 | $14.95 |
+| MPR121 | 12 capacitive touch inputs, alligator-clip pads | Fruit piano, touch keyboard | 3 | $6.95 |
+| ANO encoder | Dial with five buttons | Menus, a game controller | 2 | $13.95 |
+| PA1010D | GPS | Track a walk; needs a window or outdoors | 1 | $29.95 |
+| SCD-43 | True CO2, temperature, humidity | Room air monitor that says "open a window" | 1 | $49.95 |
+| LTR390 | UV and light | Sunburn meter | 1 | $4.95 |
+| MLX90632 | Non-contact temperature | Point-and-shoot thermometer | 1 | $17.50 |
+
+**Things that light up or move**
+
+| Part | What it does | A project | Qty | Price |
+| --- | --- | --- | --- | --- |
+| DRV2605L + motor disc | Haptic buzzes, 100+ built-in effects | Buzzing compass, silent alarm | 2 | $7.95 + $1.95 |
+| NeoPixel ring, 16 | Round ring of color LEDs | A compass ring that lights north | 2 | $9.95 |
+| NeoPixel ring, 12 | Smaller ring | A clock, a level | 1 | $8.95 |
+| NeoPixel stick, 8 RGBW | A bar with a true white LED in each pixel | A desk lamp you can dim | 2 | $7.95 |
+| NeoDriver | Drives a NeoPixel strip over I2C, with 5 V data | A meter-long light strip | 2 | $7.50 |
+| IS31FL3741 | 13×9 RGB LED matrix | Scrolling text, snake, a sensor graph | 1 | $14.95 |
+| Micro servo | Moves something, on pads 0 to 2 | A sensor that points or waves | not ordered | |
+
+**Power and supplies:** five 3×AAA holders, three 1200 mAh LiPo batteries (which need a
+separate charger: the CLUE cannot charge them), a 5 V 2 A supply for the LED strips,
+STEMMA QT cables, alligator clips, conductive fabric, a flux pen. Adafruit also sent a free
+KB2040 (an RP2040 board).
 
 ## After the meeting
 

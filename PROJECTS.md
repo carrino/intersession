@@ -3,7 +3,7 @@
 Seeds for Friday's conversation and the week. A good week-long project has a small core
 that works by the middle of the week, a demo anyone can try at the end, and stretch goals
 for the time in between. Most of these work with only what is on the CLUE; the rest need
-one sensor from the menu in [`FRIDAY.md`](FRIDAY.md).
+one part from the list in [`FRIDAY.md`](FRIDAY.md).
 
 ## With just the CLUE
 
@@ -26,9 +26,9 @@ one sensor from the menu in [`FRIDAY.md`](FRIDAY.md).
 | Step counter | The motion chip counts steps itself; write your own detector and compare | Accelerometer | Steps per minute, distance |
 | Tap commands | Tap, double tap and drop do different things | The motion chip's tap and fall detectors | A secret knock |
 
-## With one sensor from the menu
+## With one part from the order
 
-| Project | What it does | Sensor | Stretch goal |
+| Project | What it does | Part | Stretch goal |
 | --- | --- | --- | --- |
 | Theremin | Hand distance sets the pitch | VL53L1X | Second hand controls volume through tilt |
 | Parking sensor | Beeps faster as something gets closer | VL53L1X | Distance on the screen |
@@ -40,6 +40,11 @@ one sensor from the menu in [`FRIDAY.md`](FRIDAY.md).
 | Sunburn meter | UV index and how long until a burn | LTR390 | Outdoor log |
 | Thermometer gun | Point and read a surface temperature | MLX90632 | Find the coldest window |
 | Menu and drawing toy | A dial-driven menu, or an etch-a-sketch on the screen | ANO encoder | A small game |
+| Compass ring | The LED pointing north stays lit as the board turns | NeoPixel ring, day 1's orientation | Point to a saved spot |
+| Level ring | The ring lights downhill, brighter the steeper the tilt | NeoPixel ring | A two-axis level on the 12 and 16 rings |
+| Desk lamp | True white you dim with the touch pads | NeoPixel stick (RGBW) | Warm to cool by mixing in color |
+| Light strip | A meter of NeoPixels that reacts to sound or motion | NeoDriver, a strip, the 5 V supply | Music visualizer from the microphone |
+| Scrolling sign | Text or a live sensor graph on a 13×9 color matrix | IS31FL3741 | Snake, steered with the ANO dial |
 
 ## Questions to sharpen an idea
 

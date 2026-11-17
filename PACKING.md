@@ -6,8 +6,15 @@ stays home. Check with the maker space ahead of time about what they have (botto
 ## Boards and parts
 
 - All eight CLUE boards: one each for the four students and me, three spares.
-- The Adafruit order: sensors, STEMMA QT cables, battery holders, encoders, cap touch,
-  haptic drivers and motor discs, alligator clips, conductive fabric, flux pen.
+- The Adafruit order: sensors, encoders, cap touch, haptic drivers and motor discs, NeoPixel
+  rings and sticks, NeoDrivers, the LED matrix, battery holders, LiPo batteries, the 5 V
+  supply, alligator clips, conductive fabric, flux pen. Plus the STEMMA QT cables from
+  Digi-Key, since Adafruit ran out.
+- A LiPo charger, such as Adafruit's USB Micro-LiPo charger: the CLUE has no charging
+  circuit, so the three LiPo batteries cannot be recharged without one.
+- A 2.1 mm barrel jack to screw terminal adapter, so the 5 V supply's plug can feed a
+  NeoDriver's terminal block.
+- Hookup wire: the NeoPixel rings and sticks have solder pads, not connectors.
 - USB-C to micro-USB data cables, one per person plus spares, and two USB-A to micro-USB
   for any older laptop. The CLUE's port is micro-USB. Test and mark each one: a
   charge-only cable cost half an hour on day one.

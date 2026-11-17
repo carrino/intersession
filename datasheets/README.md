@@ -48,7 +48,17 @@ it sits in.
 | MLX90632 | Non-contact temperature | 0x3A | [MLX90632.pdf](MLX90632.pdf) | [Melexis](https://www.melexis.com/-/media/files/documents/datasheets/mlx90632-datasheet-melexis.pdf) |
 | LTR-390UV | UV and ambient light | 0x53 | [LTR-390UV.pdf](LTR-390UV.pdf) | [Lite-On](https://optoelectronics.liteon.com/upload/download/DS86-2015-0004/LTR-390UV_Final_%20DS_V1%201.pdf) |
 
+## LED parts in the order
+
+| Part | What it is | I2C | File | Source |
+| --- | --- | --- | --- | --- |
+| NeoPixel rings (16 and 12) | WS2812B color LEDs, one wire, 800 kHz | none | [WS2812B.pdf](WS2812B.pdf) | [Adafruit](https://cdn-shop.adafruit.com/datasheets/WS2812B.pdf) |
+| NeoPixel stick, RGBW | SK6812 RGBW LEDs: the same protocol with a white byte | none | [SK6812RGBW.pdf](SK6812RGBW.pdf) | [Adafruit](https://cdn-shop.adafruit.com/product-files/2757/p2757_SK6812RGBW_REV01.pdf) |
+| NeoDriver | An ATtiny1616 running seesaw that drives up to 512 NeoPixels, with 5 V data | 0x60 to 0x67 | the [guide](https://learn.adafruit.com/adafruit-neodriver-i2c-to-neopixel-driver) | |
+| IS31FL3741 | 13×9 RGB LED matrix driver | 0x30 to 0x33 | [IS31FL3741.pdf](IS31FL3741.pdf) | [Adafruit](https://cdn-learn.adafruit.com/assets/assets/000/104/653/original/IS31FL3741.pdf) |
+
 The MPR121 and DRV2605L share address 0x5A, so a project with both moves the MPR121 to
-0x5B with its ADDR jumper.
+0x5B with its ADDR jumper. Two NeoDrivers on one CLUE need one moved off 0x60 by cutting an
+address trace.
 
 The datasheets are their manufacturers' documents, copied here for reference.
