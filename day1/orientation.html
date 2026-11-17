@@ -78,8 +78,8 @@
       { uuid: 'c10e000f-5a7e-4a6b-9f3e-0b6f2d9a1c01', fields: [['stats', 4, 'IMU samples/s, tilt error °, missed updates, stall reboots']] },
       { uuid: 'c10e0012-5a7e-4a6b-9f3e-0b6f2d9a1c01', fields: [['plug-ins', 1, 'STEMMA QT sensors answering']] },
       { uuid: 'c10e0013-5a7e-4a6b-9f3e-0b6f2d9a1c01', fields: [['touch', 3, 'P0 P1 P2 pad counts, higher when touched']] },
-      { uuid: 'c10e0015-5a7e-4a6b-9f3e-0b6f2d9a1c01', fields: [['tap', 2, 'count, then the last one'], ['double tap', 2, 'count, then the last one'],
-                                                               ['fall', 2, 'count, then the last one'], ['steps', 2, 'count, then the last one']] },
+      { uuid: 'c10e0015-5a7e-4a6b-9f3e-0b6f2d9a1c01', readOnConnect: true,  // sent only when a count goes up
+        fields: [['tap', 1, 'since power-on'], ['double tap', 1, 'since power-on'], ['fall', 1, 'since power-on'], ['steps', 1, 'since power-on']] },
     ];
     // The plug-in sensors the board knows, in the order of its bits. Must match day1.ino.
     const PLUGINS = ['VL53L1X', 'AMG8833', 'MPR121/DRV2605', 'ANO encoder', 'PA1010D', 'SCD-43', 'LTR390', 'MLX90632'];
@@ -154,7 +154,8 @@
     resize();
 
     const VECTORS = new Set(['accel', 'gyro', 'mag', 'accel NED', 'mag NED']);  // rows that get a length column
-    const EVENTS = new Set(['tap', 'double tap', 'fall', 'steps']);  // rows of a count and the seconds since the last one
+    const EVENTS = new Set(['tap', 'double tap', 'fall', 'steps']);  // counts; the page notes when each goes up
+    const lastSeen = {};  // event name -> when this page saw its count go up
     const latest = {};  // field name -> most recent values
     const hz = {};      // field name -> packets received per second, for debugging the link
     const counts = {};
@@ -227,6 +228,9 @@
         const characteristic = await service.getCharacteristic(spec.uuid);
         characteristic.addEventListener('characteristicvaluechanged', event => onValue(spec, event.target.value));
         await characteristic.startNotifications();
+        if (spec.readOnConnect) {
+          onValue(spec, await characteristic.readValue());  // it only notifies on change, so fetch where it stands
+        }
         log('subscribed to', spec.fields.map(f => f[0]).join('+'));
       }
 
@@ -269,9 +273,13 @@
         if (data.byteLength !== 1 && offset + 4 * count > data.byteLength) {
           break;
         }
+        const before = latest[name];
         latest[name] = data.byteLength === 1
           ? [data.getUint8(0)]
           : Array.from({ length: count }, (_, i) => data.getFloat32(offset + 4 * i, true));
+        if (EVENTS.has(name) && before && latest[name][0] > before[0]) {
+          lastSeen[name] = performance.now();
+        }
         offset += 4 * count;
         counts[name] = (counts[name] || 0) + 1;
       }
@@ -313,7 +321,11 @@
         }
         if (EVENTS.has(name) && values.length) {
           cells[0] = String(values[0]).padStart(8);
-          cells[1] = values[1] < 0 ? 'none yet' : `last ${ago(values[1])}`;
+          if (lastSeen[name]) {
+            cells[1] = `last ${ago((performance.now() - lastSeen[name]) / 1000)}`;
+          } else {
+            cells[1] = values[0] ? 'before connecting' : 'none yet';
+          }
         }
         while (cells.length < 5) {
           cells.push('');  // pad so the unit and rate columns line up across rows

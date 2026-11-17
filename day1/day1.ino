@@ -71,7 +71,7 @@ const uint8_t IMU_FREE_FALL = 0x5D;
 const uint8_t IMU_FREE_FALL_SEEN = 0x20, IMU_SINGLE_TAP_SEEN = 0x20, IMU_DOUBLE_TAP_SEEN = 0x10;
 
 // How often each group of readings is sent, in packets per second.
-const int QUATERNION_HZ = 30;  // the orientation, the one thing the page needs fast
+const int QUATERNION_HZ = 30;  // the orientation, plus checking the buttons, taps and falls
 const int DEBUG_HZ = 10;       // accel, gyro, mag, color, proximity, mic, touch
 const int SLOW_HZ = 2;         // temperature, pressure, humidity, mag fit, stats
 const int SCREEN_LINES_HZ = 20;  // one line of the screen per tick: 11 lines refresh every 0.55 s
@@ -160,8 +160,8 @@ struct Readings {
   float mic;            // approximate dB SPL
   float plugins;        // which plug-in sensors answer, a bit each in the order of plugins[]
   float touch[3];       // P0, P1, P2 pad counts, higher when touched
-  float events[8];      // tap, double tap, fall, step: each a count since power-on, then the
-                        // seconds since the last one (-1 for none yet)
+  float events[4];      // taps, double taps, falls and steps since power-on; sent only when
+                        // one goes up, so the page notes when
   uint8_t buttons;      // bit 0 = A, bit 1 = B
 };
 Readings readings;
@@ -218,10 +218,8 @@ Adafruit_LSM6DS33 lsm6ds33;
 Adafruit_LSM6DS3TRC lsm6ds3trc;
 Adafruit_LSM6DS *imu = NULL;
 
-// The motion events counted so far, in the order of readings.events.
+// The motion events, in the order of readings.events.
 enum MotionEvent { EVENT_TAP, EVENT_DOUBLE_TAP, EVENT_FALL, EVENT_STEP, EVENT_COUNT };
-uint32_t eventCounts[EVENT_COUNT];
-uint32_t lastEventMs[EVENT_COUNT];
 uint16_t lastSteps = 0;          // the chip's own step counter at the last check
 bool motionEventsOn = false;     // only the LSM6DS3TR-C's detectors are set up
 Adafruit_LIS3MDL lis3mdl;
@@ -291,6 +289,9 @@ void loop() {
   if (every(1000 / QUATERNION_HZ, lastQuaternionMs)) {
     publish(quaternionChar);
     handleButtons();
+    if (readMotionEvents()) {
+      publish(eventsChar);  // like the buttons: only when something happened
+    }
   }
   if (every(1000 / DEBUG_HZ, lastDebugMs)) {
     stage = STAGE_MAG;
@@ -298,14 +299,11 @@ void loop() {
     stage = STAGE_LIGHT_MIC;
     readLightAndMic();
     readTouch();
-    stage = STAGE_IMU;
-    readMotionEvents();
     publish(vectorsChar);
     publish(colorChar);
     publish(proximityChar);
     publish(micChar);
     publish(touchChar);
-    publish(eventsChar);
   }
   if (every(1000 / SLOW_HZ, lastSlowMs)) {
     stage = STAGE_ENVIRONMENT;
@@ -508,7 +506,7 @@ void lowPass(float smoothed[3], const float latest[3], float fraction) {
 // ---- Taps, falls and steps, spotted by the motion chip itself ----
 
 // Turns on the LSM6DS3TR-C's tap, double-tap, free-fall and step detectors. What they see
-// is latched until read, so checking ten times a second misses nothing.
+// is latched until read, so checking 30 times a second misses nothing.
 void setupMotionEvents() {
   writeImuRegister(IMU_TAP_CFG, 0x8F);      // detectors on, taps on all three axes, latched
   writeImuRegister(IMU_TAP_THS_6D, 6);      // a tap is over 6 x (4 g / 32) = 0.75 g
@@ -520,31 +518,26 @@ void setupMotionEvents() {
   motionEventsOn = true;
 }
 
-// Counts what the detectors saw since the last check, and how long ago each last happened.
-void readMotionEvents() {
+// Counts what the detectors saw since the last check. Returns whether anything happened.
+bool readMotionEvents() {
   if (!motionEventsOn) {
-    return;
+    return false;
   }
   uint8_t sources[2];  // WAKE_UP_SRC then TAP_SRC; reading them clears them
   readImuRegisters(IMU_WAKE_UP_SRC, sources, 2);
-  countEvents(EVENT_FALL, (sources[0] & IMU_FREE_FALL_SEEN) ? 1 : 0);
-  countEvents(EVENT_TAP, (sources[1] & IMU_SINGLE_TAP_SEEN) ? 1 : 0);
-  countEvents(EVENT_DOUBLE_TAP, (sources[1] & IMU_DOUBLE_TAP_SEEN) ? 1 : 0);
   uint16_t steps = readSteps();
-  countEvents(EVENT_STEP, (uint16_t)(steps - lastSteps));  // the chip's counter wraps at 65536
+  int seen[EVENT_COUNT];
+  seen[EVENT_TAP] = (sources[1] & IMU_SINGLE_TAP_SEEN) ? 1 : 0;
+  seen[EVENT_DOUBLE_TAP] = (sources[1] & IMU_DOUBLE_TAP_SEEN) ? 1 : 0;
+  seen[EVENT_FALL] = (sources[0] & IMU_FREE_FALL_SEEN) ? 1 : 0;
+  seen[EVENT_STEP] = (uint16_t)(steps - lastSteps);  // the chip's counter wraps at 65536
   lastSteps = steps;
+  bool happened = false;
   for (int i = 0; i < EVENT_COUNT; i++) {
-    readings.events[2 * i] = eventCounts[i];
-    readings.events[2 * i + 1] = eventCounts[i] ? (millis() - lastEventMs[i]) / 1000.0 : -1;
+    readings.events[i] += seen[i];
+    happened = happened || seen[i] > 0;
   }
-}
-
-// Adds events of one kind and notes when they happened.
-void countEvents(MotionEvent event, int howMany) {
-  if (howMany > 0) {
-    eventCounts[event] += howMany;
-    lastEventMs[event] = millis();
-  }
+  return happened;
 }
 
 uint16_t readSteps() {
