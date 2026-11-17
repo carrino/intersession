@@ -20,10 +20,14 @@ and most of the time building something of their own.
   quaternion session can go.)
 - Have you had circuits in a physics class?
 
-## Ask what they want to build
+## Brainstorm projects
 
 - What would you build in a week if it worked? Prompts: a game, something you wear, a
   musical instrument, something that measures the world, something that moves, a gift.
+- Use [`PROJECTS.md`](PROJECTS.md) for seeds when the room goes quiet: most ideas there
+  need nothing but the CLUE.
+- Each student leaves with one or two ideas to think about over the break, sharpened with
+  the questions at the end of that file.
 - Walk the sensor menu below. Each student picks a first and second choice.
 - Tally, then settle quantities so the popular sensors can be shared by two.
 - Order soon: holiday shipping is slow, and two of the cable lines in the cart were short
@@ -37,9 +41,12 @@ and most of the time building something of their own.
 
 ## Logistics
 
-- **Laptops:** Windows or Mac? Your own, or school-managed? School laptops often block
-  installing software and sometimes block Bluetooth, which would stop everything. A
-  Chromebook or an iPad cannot run the Arduino IDE.
+- **Laptops:** everyone needs one, Windows or Mac, with a USB-C port. The CLUE's port is
+  micro-USB, so the class cables are USB-C to micro-USB; anyone with only USB-A ports gets
+  one of the spare USB-A cables.
+- **Your own or school-managed?** School laptops often block installing software and
+  sometimes block Bluetooth, which would stop everything. A Chromebook or an iPad cannot
+  run the Arduino IDE.
 - **Browser:** the class page needs Chrome or Edge.
 - **Phones:** iPhone or Android? Both run nRF Connect and Bluefruit Connect for poking at
   the board over Bluetooth. Chrome on Android can also open the class page; on an iPhone,
@@ -51,7 +58,8 @@ and most of the time building something of their own.
 
 ## Hand out
 
-- The reading list, [`READING.md`](READING.md). The repository is public, so a link works.
+- The reading list, [`READING.md`](READING.md), with its short C++ list. The repository is
+  public, so a link works.
 - The install homework, due before winter break: the setup in the README, then open
   `day1/day1.ino` and press Verify. If it compiles, the laptop is ready; no board needed.
 

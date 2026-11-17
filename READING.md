@@ -24,21 +24,62 @@ an iPad will not work.
 If anything goes wrong, send the error message; it is much easier to fix now than in
 class.
 
-## 2. Programming
+## 2. C++: a short reading list
 
-The CLUE runs C++, but only a small, plain part of it: variables, `if` and loops,
-functions, arrays and structs. You do not need classes, templates, exceptions or the
-standard library containers, which take up most of any C++ book.
+The CLUE runs C++, but only a small, plain part of it. You do not need classes, templates,
+exceptions or the standard library containers, which take up most of any C++ book. These
+lessons from [learncpp.com](https://www.learncpp.com/) cover what the board uses, about
+ten minutes each; skip everything else on the site for now. The lesson numbers are the
+site's own.
 
-- **New to programming:** work through [learncpp.com](https://www.learncpp.com/) up to and
-  including functions, `if`, loops, arrays and structs. Or, if you like paper, *Programming
-  Arduino: Getting Started with Sketches* by Simon Monk, which teaches exactly the part of
-  C++ the board uses.
-- **Already program in another language:** skim learncpp.com for what is different in
-  C++: types and their sizes (`int`, `float`, `uint8_t`), integer division, the bitwise
-  operators (`&`, `|`, `<<`, `>>`), and structs.
-- Keep the [Arduino language reference](https://docs.arduino.cc/language-reference/)
-  handy for board functions like `digitalWrite()` and `millis()`.
+learncpp's examples run on a computer and print with `std::cout`; on the board,
+`Serial.print()` and the screen do that job. To try an example, paste it into an online
+compiler such as [OnlineGDB](https://www.onlinegdb.com/online_c++_compiler).
+
+**Variables and functions**
+- 1.1 [Statements and the structure of a program](https://www.learncpp.com/cpp-tutorial/statements-and-the-structure-of-a-program/)
+- 1.3 [Introduction to objects and variables](https://www.learncpp.com/cpp-tutorial/introduction-to-objects-and-variables/)
+- 2.1 [Introduction to functions](https://www.learncpp.com/cpp-tutorial/introduction-to-functions/)
+- 2.4 [Introduction to function parameters and arguments](https://www.learncpp.com/cpp-tutorial/introduction-to-function-parameters-and-arguments/)
+
+**Numbers** (the board's code is full of `uint8_t`, `uint32_t` and `float`)
+- 4.6 [Fixed-width integers and size_t](https://www.learncpp.com/cpp-tutorial/fixed-width-integers-and-size-t/)
+- 4.8 [Floating point numbers](https://www.learncpp.com/cpp-tutorial/floating-point-numbers/)
+- 6.2 [Arithmetic operators](https://www.learncpp.com/cpp-tutorial/arithmetic-operators/) (watch for integer division)
+- 5.1 [Constant variables (named constants)](https://www.learncpp.com/cpp-tutorial/constant-variables-named-constants/)
+
+**Decisions and loops**
+- 8.2 [If statements and blocks](https://www.learncpp.com/cpp-tutorial/if-statements-and-blocks/)
+- 8.5 [Switch statement basics](https://www.learncpp.com/cpp-tutorial/switch-statement-basics/)
+- 8.10 [For statements](https://www.learncpp.com/cpp-tutorial/for-statements/)
+- 16.8 [Range-based for loops (for-each)](https://www.learncpp.com/cpp-tutorial/range-based-for-loops-for-each/)
+
+**Where variables live** (`loop()` runs forever, so this matters)
+- 7.4 [Introduction to global variables](https://www.learncpp.com/cpp-tutorial/introduction-to-global-variables/)
+- 7.11 [Static local variables](https://www.learncpp.com/cpp-tutorial/static-local-variables/)
+
+**Grouping data**
+- 17.7 [Introduction to C-style arrays](https://www.learncpp.com/cpp-tutorial/introduction-to-c-style-arrays/)
+- 13.7 [Introduction to structs, members, and member selection](https://www.learncpp.com/cpp-tutorial/introduction-to-structs-members-and-member-selection/)
+- 13.2 [Unscoped enumerations](https://www.learncpp.com/cpp-tutorial/unscoped-enumerations/)
+
+**References and pointers** (just the introductions)
+- 12.3 [Lvalue references](https://www.learncpp.com/cpp-tutorial/lvalue-references/)
+- 12.7 [Introduction to pointers](https://www.learncpp.com/cpp-tutorial/introduction-to-pointers/)
+- 17.8 [C-style array decay](https://www.learncpp.com/cpp-tutorial/c-style-array-decay/)
+
+**Bits** (how one byte holds both buttons)
+- O.2 [Bitwise operators](https://www.learncpp.com/cpp-tutorial/bitwise-operators/)
+- O.3 [Bit manipulation with bitwise operators and bit masks](https://www.learncpp.com/cpp-tutorial/bit-manipulation-with-bitwise-operators-and-bit-masks/)
+
+**Then read real code:** open `day1/day1.ino` and find a struct, an enum, a `switch`, a
+static local variable, a range-based `for`, and a bit mask. Most of the rest is calling
+the libraries' objects, like `display.print()`, which reads the way it looks.
+
+If you already program in another language, skim the list for what is different in C++.
+If you like paper, *Programming Arduino: Getting Started with Sketches* by Simon Monk
+covers the same ground. Keep the [Arduino language reference](https://docs.arduino.cc/language-reference/)
+handy for board functions like `digitalWrite()` and `millis()`.
 
 ## 3. Electronics
 

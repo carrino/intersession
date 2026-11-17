@@ -8,7 +8,8 @@ stays home. Check with the maker space ahead of time about what they have (botto
 - All eight CLUE boards: one each for the four students and me, three spares.
 - The Adafruit order: sensors, STEMMA QT cables, battery holders, encoders, cap touch,
   haptic drivers and motor discs, alligator clips, conductive fabric, flux pen.
-- Micro-USB data cables, one per student plus spares, each one tested and marked. A
+- USB-C to micro-USB data cables, one per person plus spares, and two USB-A to micro-USB
+  for any older laptop. The CLUE's port is micro-USB. Test and mark each one: a
   charge-only cable cost half an hour on day one.
 - AAA batteries: three per holder plus a spare set.
 - A little kit: resistors, a few LEDs, jumper wires, a half-size breadboard or two.
@@ -30,7 +31,8 @@ stays home. Check with the maker space ahead of time about what they have (botto
 
 - Laptop and charger, with the Arduino IDE, the nRF52 board package, the Arcada
   "install all" and every sensor's library already installed and tested against a board.
-- A USB stick with the IDE installers and the board package, for the student whose
+- A USB stick with both plugs (USB-C and USB-A) holding the IDE installers and the board
+  package, for the student whose
   download fails. The board package alone is a big download on shared wifi.
 - Projector adapter (HDMI, USB-C), and the slides: quaternions, PCBs.
 - TechDisc, charged, with the phone and app for the demo.
