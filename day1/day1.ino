@@ -839,25 +839,35 @@ void setupBle() {
   bleStarted = true;
 }
 
-// Reports the radio settings the laptop or phone agreed to, once they have settled and
-// whenever they change: the MTU decides whether the bigger packets arrive whole, the
-// interval is the ceiling on how many packets a second get through, and the timeout is
-// how long the other side waits in silence before it declares the link dead.
+// Asks for the 2 Mbit radio mode once per connection, then reports the radio settings the
+// laptop or phone agreed to, once they have settled and whenever they change: the MTU
+// decides whether the bigger packets arrive whole, the interval is the ceiling on how many
+// packets a second get through, the timeout is how long the other side waits in silence
+// before it declares the link dead, and the mode is how fast each packet goes over the air.
 void noteLinkSettings() {
   static uint16_t lastMtu = 0, lastInterval = 0, lastTimeout = 0;
+  static uint8_t lastPhy = 0;
+  static bool askedFor2Mbit = false;
   BLEConnection *conn = Bluefruit.Connection(Bluefruit.connHandle());
   if (!Bluefruit.connected() || conn == NULL) {
     lastMtu = 0;
+    askedFor2Mbit = false;
     return;
   }
+  // 2 Mbit sends each packet in half the air time. The laptop has the final say, and the
+  // request is refused while the radio is busy with another change, so it is retried.
+  if (!askedFor2Mbit) {
+    askedFor2Mbit = conn->requestPHY(BLE_GAP_PHY_2MBPS);
+  }
   if (conn->getMtu() != lastMtu || conn->getConnectionInterval() != lastInterval ||
-      conn->getSupervisionTimeout() != lastTimeout) {
+      conn->getSupervisionTimeout() != lastTimeout || conn->getPHY() != lastPhy) {
     lastMtu = conn->getMtu();
     lastInterval = conn->getConnectionInterval();
     lastTimeout = conn->getSupervisionTimeout();
+    lastPhy = conn->getPHY();
     char message[64];
     snprintf(message, sizeof(message), "Link: MTU %u, interval %.2f ms, timeout %u ms, %u Mbit PHY", lastMtu,
-             lastInterval * 1.25, lastTimeout * 10, conn->getPHY() == BLE_GAP_PHY_2MBPS ? 2 : 1);
+             lastInterval * 1.25, lastTimeout * 10, lastPhy == BLE_GAP_PHY_2MBPS ? 2 : 1);
     note(message);
   }
 }

@@ -276,6 +276,9 @@ subscribes to characteristics.
 - When the radio queue is full, the board skips ahead, and the stats row counts misses.
 - Supervision timeout: Windows asked for 9.6 s, which is how long it takes the laptop to
   notice a board that reset.
+- The radio mode: 1 Mbit or 2 Mbit is how fast bits go while transmitting, not the
+  throughput. Most of the time the radio is quiet between connection events, so a link
+  carries a few to a few tens of kB/s. The board asks for 2 Mbit; the laptop decides.
 - 2.4 GHz shared with wifi; range; one connection at a time here.
 
 **Demo:** the class page, then nRF Connect or Bluefruit Connect on a phone subscribing to
