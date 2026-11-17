@@ -308,5 +308,5 @@ Bigger topics that deserve their own session, or that fit into project time:
 
 # For Friday
 
-The talking points and the sensor menu for the first meeting are in
+The talking points and the parts list for the first meeting are in
 [`FRIDAY.md`](FRIDAY.md); the reading list for the break is [`READING.md`](READING.md).
