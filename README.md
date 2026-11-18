@@ -66,6 +66,11 @@ You should now see **Adafruit CLUE** under Tools > Board > Adafruit nRF52 Boards
   the cable. Keep a couple of known-good cables in the room.
 - **Upload fails:** double-click the small reset button on the CLUE. The screen goes dark
   and a `CLUEBOOT` drive appears. Upload again.
+- **The `COM` port changes, say from COM3 to COM4, and the upload cannot find the board:**
+  Windows numbers the board differently while it runs a sketch and while it is in its
+  bootloader, the mode an upload switches it into first and the one a double-click reset
+  leaves it in. It also gives each board its own number. Open Tools > Port again, pick the
+  number listed now, and upload again.
 - **Upload succeeds but the sketch never starts:** Tools > SoftDevice must match the board.
   Open `INFO_UF2.TXT` on the `CLUEBOOT` drive to see which version the board has.
 - **Black screen with the front white LEDs stuck on after an upload, and resets or
