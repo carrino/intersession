@@ -242,13 +242,19 @@
     }
 
     // Everything after the device is chosen: connect, find the service, subscribe to it all.
+    // The listeners from the connection before are dropped first: the browser keeps
+    // delivering packets to them after a reconnect, so each packet would count twice.
+    let listeners = null;
     async function subscribe() {
+      listeners?.abort();
+      listeners = new AbortController();
+      const untilNextConnect = { signal: listeners.signal };
       const server = await device.gatt.connect();
       log('connected, discovering service');
       const service = await server.getPrimaryService(SERVICE_UUID);
       for (const spec of CHARACTERISTICS) {
         const characteristic = await service.getCharacteristic(spec.uuid);
-        characteristic.addEventListener('characteristicvaluechanged', event => onValue(spec, event.target.value));
+        characteristic.addEventListener('characteristicvaluechanged', event => onValue(spec, event.target.value), untilNextConnect);
         await characteristic.startNotifications();
         if (spec.readOnConnect) {
           onValue(spec, await characteristic.readValue());  // it only notifies on change, so fetch where it stands
@@ -257,7 +263,7 @@
       }
 
       const logChr = await service.getCharacteristic(LOG_UUID);
-      logChr.addEventListener('characteristicvaluechanged', event => showLog(event.target.value));
+      logChr.addEventListener('characteristicvaluechanged', event => showLog(event.target.value), untilNextConnect);
       await logChr.startNotifications();
       showLog(await logChr.readValue());  // anything it said before we connected, such as why it rebooted
 
