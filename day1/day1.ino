@@ -79,6 +79,10 @@ const int DEBUG_HZ = 10;       // accel, gyro, mag, color, proximity, mic, touch
 const int SLOW_HZ = 2;         // temperature, humidity, mag fit, stats
 const int SCREEN_LINES_HZ = 20;  // one line of the screen per tick: 11 lines refresh every 0.55 s
 
+// How many times the board asks for the 2 Mbit radio mode, one ask per slow tick, before
+// taking no for an answer.
+const int PHY_REQUESTS = 6;
+
 // How far toward the accelerometer's idea of "down" we move on each IMU sample, and how
 // far toward the magnetometer's idea of "north" on each mag reading. Small is smooth but
 // slow to fix gyro drift; large is quick but jittery.
@@ -1028,25 +1032,27 @@ void setupBle() {
   bleStarted = true;
 }
 
-// Asks for the 2 Mbit radio mode once per connection, then reports the radio settings the
-// laptop or phone agreed to, once they have settled and whenever they change: the MTU
+// Asks for the 2 Mbit radio mode until the laptop or phone agrees, then reports the radio
+// settings it agreed to, once they have settled and whenever they change: the MTU
 // decides whether the bigger packets arrive whole, the interval is the ceiling on how many
 // packets a second get through, the timeout is how long the other side waits in silence
 // before it declares the link dead, and the mode is how fast each packet goes over the air.
 void noteLinkSettings() {
   static uint16_t lastMtu = 0, lastInterval = 0, lastTimeout = 0;
   static uint8_t lastPhy = 0;
-  static bool askedFor2Mbit = false;
+  static int phyRequests = 0;
   BLEConnection *conn = Bluefruit.Connection(Bluefruit.connHandle());
   if (!Bluefruit.connected() || conn == NULL) {
     lastMtu = 0;
-    askedFor2Mbit = false;
+    phyRequests = 0;
     return;
   }
-  // 2 Mbit sends each packet in half the air time. The laptop has the final say, and the
-  // request is refused while the radio is busy with another change, so it is retried.
-  if (!askedFor2Mbit) {
-    askedFor2Mbit = conn->requestPHY(BLE_GAP_PHY_2MBPS);
+  // 2 Mbit sends each packet in half the air time. The laptop has the final say. A request
+  // is refused while the radio is busy, and fails if it crosses a change the laptop starts
+  // at the same moment (Windows changes the interval a second after connecting), so the
+  // board keeps asking for a few seconds.
+  if (conn->getPHY() != BLE_GAP_PHY_2MBPS && phyRequests < PHY_REQUESTS && conn->requestPHY(BLE_GAP_PHY_2MBPS)) {
+    phyRequests++;
   }
   if (conn->getMtu() != lastMtu || conn->getConnectionInterval() != lastInterval ||
       conn->getSupervisionTimeout() != lastTimeout || conn->getPHY() != lastPhy) {
