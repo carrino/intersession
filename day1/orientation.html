@@ -21,6 +21,7 @@
     .face { width: 9em; padding: 0.4em; border: 1px solid #555; border-radius: 4px; text-align: center; cursor: pointer; }
     .face span { display: block; min-height: 1.2em; font-size: 0.9em; }
     #spectrum { display: block; margin-top: 0.5em; background: #000; border-radius: 6px; }
+    #data.paused { outline: 1px dashed #888; }
   </style>
 </head>
 <body>
@@ -46,7 +47,8 @@
       <span class="mag">mag</span> toward magnetic north and down. If they swing with the board, the orientation is off.
       Once the board is calibrated, the mag fit keeps watching for anything the stored offset missed, so its
       offset should stay near zero. The color sensor only sees what is lit: hold button B to turn on the
-      front LEDs while holding something in front of it.</p>
+      front LEDs while holding something in front of it. Selecting text in the table pauses it so it can be
+      copied; click anywhere to let it run again.</p>
   </div>
 
   <script type="importmap">
@@ -174,7 +176,7 @@
         summary.push(`${name} ${counts[name]}`);
         counts[name] = 0;
       }
-      if (summary.length) {
+      if (summary.length && device?.gatt.connected) {  // not while disconnected, so the reconnect tries stand out
         log('packets/s:', summary.join(', '));
       }
     }, 1000);
@@ -203,10 +205,17 @@
     }
 
     // A board that reset drops the link and is advertising again a few seconds later. Web
-    // Bluetooth does nothing about that on its own, so try to reconnect once a second for
-    // ten minutes. Discovery runs again because the old characteristic handles died with
-    // the link.
+    // Bluetooth does nothing about that on its own, so keep trying to reconnect, a second
+    // apart, 600 times. Discovery runs again because the old characteristic handles died
+    // with the link. A try can hang without ever failing (Windows can wait forever on a
+    // board that is not answering), so each one gives up after RECONNECT_TIMEOUT_MS.
+    const RECONNECT_TIMEOUT_MS = 10000;
+    let reconnecting = false;
     async function reconnect() {
+      if (reconnecting) {
+        return;  // a try that connected and then dropped fires this again; the loop carries on
+      }
+      reconnecting = true;
       const lost = device;
       log('disconnected');
       pixelInput.disabled = true;
@@ -214,13 +223,22 @@
         status.textContent = `Disconnected, reconnecting (try ${tries})`;
         await new Promise(resolve => setTimeout(resolve, 1000));
         try {
-          await subscribe();
+          await withTimeout(subscribe(), RECONNECT_TIMEOUT_MS);
+          reconnecting = false;
           return;
         } catch (err) {
           log('reconnect failed:', err.message);
+          lost.gatt.disconnect();  // cancels a connect still waiting, so the next try starts clean
         }
       }
+      reconnecting = false;
       status.textContent = 'Disconnected';
+    }
+
+    // The promise's result, or an error if it takes longer than ms.
+    function withTimeout(promise, ms) {
+      const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error(`no answer in ${ms / 1000} s`)), ms));
+      return Promise.race([promise, timeout]);
     }
 
     // Everything after the device is chosen: connect, find the service, subscribe to it all.
@@ -304,9 +322,27 @@
       }
     }
 
+    // Redrawing the table would wipe out a selection, so it holds still while text in it is
+    // being selected, from the moment the mouse goes down until the selection is cleared.
+    let pointerDownInTable = false;
+    table.addEventListener('pointerdown', () => { pointerDownInTable = true; });
+    addEventListener('pointerup', () => { pointerDownInTable = false; });
+    function selectingInTable() {
+      const selection = getSelection();
+      return pointerDownInTable || (!selection.isCollapsed && selection.containsNode(table, true));
+    }
+    // A click on the 3D view leaves any selection in place, so clear it there, or the table
+    // would stay paused.
+    renderer.domElement.addEventListener('pointerdown', () => getSelection().removeAllRanges());
+
     // One row per field: its values, the vector length for 3-vectors, the unit, and how
     // many packets a second its characteristic is arriving at.
     function showTable() {
+      const paused = selectingInTable();
+      table.classList.toggle('paused', paused);
+      if (paused) {
+        return;
+      }
       const rows = CHARACTERISTICS.flatMap(spec => spec.fields).map(([name, count, unit]) => {
         const values = latest[name] || [];
         const number = v => v.toFixed(2).padStart(8);  // fixed width, so columns never shift
@@ -326,7 +362,8 @@
         if (name === 'spectrum') {
           cells.length = 0;  // the bands are drawn under the table; here just the loudest
           const loudest = values.indexOf(Math.max(...values));
-          cells.push(values.length ? (values[loudest] ? `loudest ${bandName(loudest)}` : 'quiet') : '');
+          const label = values.length ? (values[loudest] ? `loudest ${bandName(loudest)}` : 'quiet') : '';
+          cells.push(label.padStart(15));  // as wide as 'loudest 1.8 kHz', so the columns never shift
         }
         if (name === 'pressure' && values.length) {
           cells[1] = `≈ ${Math.round(feetAboveSeaLevel(values[0]))} ft above sea level`;
@@ -359,7 +396,8 @@
       } else {
         console.log('DEVICE: ' + text);
       }
-      document.getElementById('log').textContent += `${new Date().toLocaleTimeString()}  ${text}\n`;
+      // append() adds the line without replacing the text already there, so a selection in it survives.
+      document.getElementById('log').append(`${new Date().toLocaleTimeString()}  ${text}\n`);
     }
 
     // The color counts scaled so the strongest channel is full brightness: the hue, not the amount of light.
