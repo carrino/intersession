@@ -206,11 +206,17 @@ would you tell?
 finger on the edge fingers between 3V and GND and watch the edges round off.
 
 To connect it, plug a STEMMA QT to male header cable into the CLUE's port, or into the
-spare port of any plugged-in sensor, since they pass the bus through. Clip the probes to
-blue (SDA), yellow (SCL) and black (GND). Use 10× probes if there are any: a 1× probe adds
-about as much capacitance as the finger does. Trigger on SDA falling. The bus is busy:
-a 14-byte motion read every 2.4 ms, so zoom into one to see the address, the register,
-and the acknowledgements.
+spare port of any plugged-in sensor, since they pass the bus through: blue is SDA, yellow
+SCL, black GND.
+
+- For the decoded bytes, the Logic Analyzer: SDA and SCL on any two of the Moku:Go's 16
+  digital pins (they are all the same) and a ground. Digital inputs barely load the bus.
+- For the edge shapes, the Oscilloscope's analog inputs. Use 10× probes there if there are
+  any (the switch on the probe, with the channel set to match): a 1× probe adds about as
+  much capacitance as the finger does.
+
+Trigger on SDA falling. The bus is busy: a 14-byte motion read every 2.4 ms, so zoom into
+one to see the address, the register, and the acknowledgements.
 
 **Story:** a finger there made the board reboot "stuck in the IMU". 4.7 kΩ pull-ups times
 about 150 pF of bus plus finger gives a rise time near 600 ns, twice the 400 kHz limit.
