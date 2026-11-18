@@ -74,8 +74,8 @@ const uint8_t IMU_FREE_FALL_SEEN = 0x20, IMU_SINGLE_TAP_SEEN = 0x20, IMU_DOUBLE_
 
 // How often each group of readings is sent, in packets per second.
 const int QUATERNION_HZ = 30;  // the orientation, plus checking the buttons, taps and falls
-const int DEBUG_HZ = 10;       // accel, gyro, mag, color, proximity, mic, touch
-const int SLOW_HZ = 2;         // temperature, pressure, humidity, mag fit, stats
+const int DEBUG_HZ = 10;       // accel, gyro, mag, color, proximity, mic, touch, pressure
+const int SLOW_HZ = 2;         // temperature, humidity, mag fit, stats
 const int SCREEN_LINES_HZ = 20;  // one line of the screen per tick: 11 lines refresh every 0.55 s
 
 // How far toward the accelerometer's idea of "down" we move on each IMU sample, and how
@@ -301,11 +301,14 @@ void loop() {
     stage = STAGE_LIGHT_MIC;
     readLightAndMic();
     readTouch();
+    stage = STAGE_ENVIRONMENT;
+    readings.pressure = bmp280.readPressure() / 100;  // often, so altitude follows the board up and down
     publish(vectorsChar);
     publish(colorChar);
     publish(proximityChar);
     publish(micChar);
     publish(touchChar);
+    publish(pressureChar);
   }
   if (every(1000 / SLOW_HZ, lastSlowMs)) {
     stage = STAGE_ENVIRONMENT;
@@ -313,7 +316,6 @@ void loop() {
     fitMag();
     updateStats();
     publish(temperatureChar);
-    publish(pressureChar);
     publish(humidityChar);
     publish(magFitChar);
     publish(statsChar);
@@ -570,7 +572,6 @@ void readImuRegisters(uint8_t reg, uint8_t *data, int len) {
 
 void readEnvironment() {
   readings.temperature = bmp280.readTemperature();
-  readings.pressure = bmp280.readPressure() / 100;
   readHumidity();
 }
 
@@ -853,7 +854,14 @@ void setupSensors() {
   if (Wire.endTransmission() != 0) {
     warn("SHT30 missing");
   }
-  if (!bmp280.begin()) {
+  // Pressure: the datasheet's indoor-navigation oversampling (about 26 readings a second)
+  // with a light filter, so it is steady to a few centimeters and follows a lift in about
+  // 0.2 s. The page turns it into feet above sea level.
+  if (bmp280.begin()) {
+    bmp280.setSampling(Adafruit_BMP280::MODE_NORMAL, Adafruit_BMP280::SAMPLING_X2,
+                       Adafruit_BMP280::SAMPLING_X16, Adafruit_BMP280::FILTER_X4,
+                       Adafruit_BMP280::STANDBY_MS_1);
+  } else {
     warn("BMP280 missing");
   }
   // The sensor libraries leave the bus at 100 kHz, which makes the 14-byte IMU read take
