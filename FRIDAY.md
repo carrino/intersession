@@ -90,9 +90,10 @@ Prices are from the order. The AMG8833 thermal camera was out of stock, so it is
 | Micro servo | Moves something, on pads 0 to 2 | A sensor that points or waves | not ordered | |
 
 **Power and supplies:** five 3×AAA holders, three 1200 mAh LiPo batteries (which need a
-separate charger: the CLUE cannot charge them), a 5 V 2 A supply for the LED strips,
-STEMMA QT cables, alligator clips, conductive fabric, a flux pen. Adafruit also sent a free
-KB2040 (an RP2040 board).
+separate charger: the CLUE cannot charge them), a 5 V 2 A supply for the LED strips with a
+barrel jack to screw terminal adapter, thirteen STEMMA QT cables (50, 200 and 400 mm) and
+four that end in header pins for a breadboard, alligator clips, conductive fabric, a flux
+pen. Adafruit also sent a free KB2040 (an RP2040 board).
 
 ## After the meeting
 
