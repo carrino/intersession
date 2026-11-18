@@ -2,7 +2,7 @@
 //
 // What it adds: stillRunning() is the loop saying it is alive. If it goes quiet for a
 // second, the stall check says what the loop was doing (the stage), hangs up the Bluetooth
-// link and resets the chip. A hardware watchdog timer does the same after five seconds if
+// link and resets the chip. A hardware watchdog timer does the same after thirty seconds if
 // even that fails. reportLastReset() says after the restart why it happened, and
 // unstickI2cBus() frees a sensor left holding the bus.
 //
@@ -10,6 +10,13 @@
 // upload at the wrong moment, a connector going in, a finger on the edge pads) can leave a
 // sensor holding the data line, so the next read waits forever. Without this the screen
 // just freezes; with it the board is back in two seconds and tells you where it was stuck.
+
+// The hardware watchdog cannot be stopped once it is started, and it keeps counting through
+// the reset that begins an upload. The bootloader then erases the old program in one go,
+// about 85 ms for each 4 kB page, without reporting in: over six seconds for this sketch,
+// seventeen for the biggest one that fits. At five seconds the watchdog went off in the
+// middle of that and uploads failed partway. Thirty outlasts any upload.
+const int WATCHDOG_SECONDS = 30;
 
 volatile uint32_t loopAliveMs = 0;  // when loop() last checked in
 int stallReboots = 0;               // since power-on; a reset keeps it in the retention register
@@ -74,11 +81,13 @@ void reportLastReset() {
 }
 
 // The backstop behind the stall check: a hardware timer that resets the chip if loop()
-// stops reporting in for five seconds, even if the stall check itself is wedged. The bus
-// is cleared on the way back up. A delay() longer than five seconds trips it.
+// stops reporting in for WATCHDOG_SECONDS, even if the stall check itself is wedged. The
+// bus is cleared on the way back up. If it is already running, left on by the program
+// before an upload, it keeps the timeout it was started with until the reset button is
+// pressed or the power goes.
 void startWatchdog() {
   NRF_WDT->CONFIG = WDT_CONFIG_SLEEP_Run << WDT_CONFIG_SLEEP_Pos;  // keeps counting while asleep
-  NRF_WDT->CRV = 5 * 32768;                                        // five seconds of its 32768 Hz clock
+  NRF_WDT->CRV = WATCHDOG_SECONDS * 32768;                         // in ticks of its 32768 Hz clock
   NRF_WDT->RREN = WDT_RREN_RR0_Msk;
   NRF_WDT->TASKS_START = 1;
 }

@@ -113,11 +113,10 @@ You should now see **Adafruit CLUE** under Tools > Board > Adafruit nRF52 Boards
   the small fingers, leaving the five big rings free, takes fingers out of it. The last
   value in the page's stats row counts these reboots since power-on, so you can tell a
   one-off from a pattern.
-- **The screen says `Rebooted by the watchdog` in red:** the loop stopped for five seconds
-  and even the stall check above did not get to report where. That points at a crash or
-  something holding the whole processor, not a stuck sensor. The line also shows on the
-  page when it next connects. Note what the board was doing and whether the laptop had
-  just gone to sleep or been unplugged.
+- **The screen says `Rebooted by the watchdog` in red:** the loop stopped for thirty
+  seconds and even the stall check above did not get to report where. That points at a
+  crash or something holding the whole processor, not a stuck sensor. The line also shows
+  on the page when it next connects. Note what the board was doing.
 - **"Adafruit CLUE" is not in the board list:** step 3 of the setup did not finish.
 - **A `.h` file is not found:** step 4 did not finish, or the sketch was opened from a copy
   of the `.ino` file on its own instead of from its folder.
