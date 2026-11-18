@@ -12,9 +12,13 @@
 // change faster than the radio can carry them, subscribers skip ahead to the latest and
 // stats counts what they missed.
 
-// How many times the board asks for the 2 Mbit radio mode, one ask per slow tick, before
-// taking no for an answer.
-const int PHY_REQUESTS = 6;
+// What the board asks the laptop for once connected. The interval is how often the two
+// radios meet, in units of 1.25 ms: each meeting carries only a handful of packets and the
+// board has about 130 a second to send. Left alone, Windows settles on 60 ms, about 17
+// meetings a second, and readings get skipped; 15 ms is four times that. Each request is
+// made up to LINK_REQUESTS times, one per slow tick, before taking no for an answer.
+const int LINK_INTERVAL = 12;
+const int LINK_REQUESTS = 6;
 
 void setupBle() {
   // Max MTU 247 so the 60-byte vectors packet fits, and room to queue 8 notifications.
@@ -45,30 +49,34 @@ void setupBle() {
   Bluefruit.Advertising.restartOnDisconnect(true);
   Bluefruit.Advertising.setInterval(32, 32);  // every 20 ms, always, so reconnecting is quick
   Bluefruit.Advertising.start(0);             // 0 = keep advertising until connected
-  bleStarted = true;
 }
 
-// Asks for the 2 Mbit radio mode until the laptop or phone agrees, then reports the radio
-// settings it agreed to, once they have settled and whenever they change: the MTU
+// Asks for the 2 Mbit radio mode and a short interval until the laptop or phone agrees,
+// then reports the radio settings it agreed to, whenever they change: the MTU
 // decides whether the bigger packets arrive whole, the interval is the ceiling on how many
 // packets a second get through, the timeout is how long the other side waits in silence
 // before it declares the link dead, and the mode is how fast each packet goes over the air.
 void noteLinkSettings() {
   static uint16_t lastMtu = 0, lastInterval = 0, lastTimeout = 0;
   static uint8_t lastPhy = 0;
-  static int phyRequests = 0;
+  static int phyRequests = 0, intervalRequests = 0;
   BLEConnection *conn = Bluefruit.Connection(Bluefruit.connHandle());
   if (!Bluefruit.connected() || conn == NULL) {
     lastMtu = 0;
-    phyRequests = 0;
+    phyRequests = intervalRequests = 0;
     return;
   }
   // 2 Mbit sends each packet in half the air time. The laptop has the final say. A request
   // is refused while the radio is busy, and fails if it crosses a change the laptop starts
   // at the same moment (Windows changes the interval a second after connecting), so the
   // board keeps asking for a few seconds.
-  if (conn->getPHY() != BLE_GAP_PHY_2MBPS && phyRequests < PHY_REQUESTS && conn->requestPHY(BLE_GAP_PHY_2MBPS)) {
+  if (conn->getPHY() != BLE_GAP_PHY_2MBPS && phyRequests < LINK_REQUESTS && conn->requestPHY(BLE_GAP_PHY_2MBPS)) {
     phyRequests++;
+  }
+  // The same goes for the interval. Zero is no skipped meetings; the timeout stays as it is.
+  if (conn->getConnectionInterval() > LINK_INTERVAL && intervalRequests < LINK_REQUESTS &&
+      conn->requestConnectionParameter(LINK_INTERVAL, 0, conn->getSupervisionTimeout())) {
+    intervalRequests++;
   }
   if (conn->getMtu() != lastMtu || conn->getConnectionInterval() != lastInterval ||
       conn->getSupervisionTimeout() != lastTimeout || conn->getPHY() != lastPhy) {

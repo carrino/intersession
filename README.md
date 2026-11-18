@@ -2,7 +2,26 @@
 
 Code for the Adafruit CLUE board. Each day lives in its own folder with a sketch named
 after the folder, for example `day1/day1.ino`. Open that file in the Arduino IDE and the
-other files in the folder come along with it.
+other files in the folder come along with it, as tabs across the top.
+
+`day1.ino` is the whole picture: the pins, the list of readings, `setup()` and `loop()`.
+Anything that takes more than one library call has its own tab, starting with a header
+that says what it adds and why. Open the ones your project uses:
+
+| Tab | What it is |
+|---|---|
+| `Orientation` | Which way the board is facing, from the gyro, accelerometer and compass |
+| `Calibration` | This board's sensor offsets, kept in its flash |
+| `MotionEvents` | Taps, double taps, falls and steps, spotted by the motion chip itself |
+| `Sound` | The microphone's loudness and its spectrum |
+| `Beat` | Finds the beat in music and flashes the back NeoPixel on it |
+| `Touch` | The P0, P1 and P2 ring pads as touch pads |
+| `Plugins` | Notices STEMMA QT boards being plugged in |
+| `Bluetooth` | How the readings get to the page |
+| `Name` | A name for each board |
+| `Screen` | The readings on the board's own screen |
+| `Log` | What the board has to say: `note()` and `warn()` |
+| `Watchdog` | Gets the board going again by itself when the loop stops |
 
 The [`datasheets`](datasheets/README.md) folder has the CLUE's schematic and pinout and the
 datasheet for every sensor on it or in the parts order.
@@ -55,7 +74,11 @@ You should now see **Adafruit CLUE** under Tools > Board > Adafruit nRF52 Boards
    fall row counts that. The motion chip spots these itself; it needs the LSM6DS3TR-C of
    the CLUE's 2025 revision, and the board's "Started with the ..." log line says which
    chip it has.
-8. The three ring pads P0, P1 and P2 on the bottom edge are touch pads. The screen's
+8. Play music with a steady beat near the board. After a few seconds the NeoPixel on the
+   back flashes on the beat, a new color each time, and the page's beat row shows the tempo.
+   Songs often fit half or double their tempo as well, so a fast song may flash on every
+   other beat. It stops within a few seconds of the music stopping.
+9. The three ring pads P0, P1 and P2 on the bottom edge are touch pads. The screen's
    `Touch:` line and the page's touch row count higher while a finger is on one, or on
    anything conductive clipped to it, such as the conductive fabric on an alligator clip.
 
@@ -89,6 +112,11 @@ You should now see **Adafruit CLUE** under Tools > Board > Adafruit nRF52 Boards
   the small fingers, leaving the five big rings free, takes fingers out of it. The last
   value in the page's stats row counts these reboots since power-on, so you can tell a
   one-off from a pattern.
+- **The screen says `Rebooted by the watchdog` in red:** the loop stopped for five seconds
+  and even the stall check above did not get to report where. That points at a crash or
+  something holding the whole processor, not a stuck sensor. The line also shows on the
+  page when it next connects. Note what the board was doing and whether the laptop had
+  just gone to sleep or been unplugged.
 - **"Adafruit CLUE" is not in the board list:** step 3 of the setup did not finish.
 - **A `.h` file is not found:** step 4 did not finish, or the sketch was opened from a copy
   of the `.ino` file on its own instead of from its folder.

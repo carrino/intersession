@@ -3,6 +3,7 @@
 // What it adds: setupMic() starts the microphone, micDecibels() is the loudness since it
 // was last asked, updateSpectrum() turns each block of samples into the loudness of 13
 // bands from bass to treble, and sendSpectrum() publishes them for the page's dot grid.
+// The bands also feed the beat finder in Beat.ino.
 //
 // Why: the mic is not on the I2C bus like the other sensors. It sends a stream of single
 // bits (PDM) that the chip's own hardware turns into 16,000 samples a second and hands
@@ -98,15 +99,12 @@ void setupSpectrum() {
   }
 }
 
-// Turns the latest block into the loudness of each band, keeping the loudest each reaches
-// until it is sent. Skipped while nobody is watching, since an FFT is real work.
+// Turns the latest block, if there is a new one, into the loudness of each band. The bands
+// go to the beat finder in Beat.ino, and the loudest each reaches is kept until it is sent.
 void updateSpectrum() {
   static float samples[FFT_SIZE], bins[FFT_SIZE], power[FFT_SIZE / 2];
+  float bandDb[SPECTRUM_BANDS];
   if (!fftBlockReady) {
-    return;
-  }
-  if (!spectrumChar.notifyEnabled()) {
-    fftBlockReady = false;
     return;
   }
   for (int i = 0; i < FFT_SIZE; i++) {
@@ -123,10 +121,11 @@ void updateSpectrum() {
     // Roughly the band's RMS in sample units: the FFT and the window (which adds up to
     // about FFT_SIZE / 2) each scale the bins up, so this undoes both.
     float rms = sqrtf(2 * sum) / (FFT_SIZE / 2);
-    float dB = 20 * log10f(rms / 32768 + 1e-9f) + MIC_DB_OFFSET;
-    float level = constrain((dB - SPECTRUM_FLOOR_DB) * 255 / (SPECTRUM_TOP_DB - SPECTRUM_FLOOR_DB), 0, 255);
+    bandDb[b] = 20 * log10f(rms / 32768 + 1e-9f) + MIC_DB_OFFSET;
+    float level = constrain((bandDb[b] - SPECTRUM_FLOOR_DB) * 255 / (SPECTRUM_TOP_DB - SPECTRUM_FLOOR_DB), 0, 255);
     spectrumPeaks[b] = max(spectrumPeaks[b], (uint8_t)level);
   }
+  updateBeat(bandDb);
 }
 
 // Sends the loudest each band got since the last send, about 30 times a second, so a

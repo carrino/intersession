@@ -79,6 +79,7 @@
       { uuid: 'c10e000a-5a7e-4a6b-9f3e-0b6f2d9a1c01', fields: [['mic', 1, 'dB SPL, approx']] },
       { uuid: 'c10e000b-5a7e-4a6b-9f3e-0b6f2d9a1c01', bytes: true, fields: [['buttons', 1, 'A=1 B=2']] },
       { uuid: 'c10e0016-5a7e-4a6b-9f3e-0b6f2d9a1c01', bytes: true, fields: [['spectrum', 13, '13 bands, 100 Hz to 8 kHz, drawn below']] },
+      { uuid: 'c10e0017-5a7e-4a6b-9f3e-0b6f2d9a1c01', readOnConnect: true, fields: [['beat', 2, "the music's tempo, beats counted"]] },
       { uuid: 'c10e000c-5a7e-4a6b-9f3e-0b6f2d9a1c01', fields: [['mag fit', 5, 'offset x y z, radius µT, faces seen']] },
       { uuid: 'c10e000f-5a7e-4a6b-9f3e-0b6f2d9a1c01', fields: [['stats', 4, 'IMU samples/s, tilt error °, missed updates, stall reboots']] },
       { uuid: 'c10e0012-5a7e-4a6b-9f3e-0b6f2d9a1c01', fields: [['plug-ins', 1, 'STEMMA QT sensors answering']] },
@@ -265,7 +266,6 @@
       const logChr = await service.getCharacteristic(LOG_UUID);
       logChr.addEventListener('characteristicvaluechanged', event => showLog(event.target.value), untilNextConnect);
       await logChr.startNotifications();
-      showLog(await logChr.readValue());  // anything it said before we connected, such as why it rebooted
 
       const pixel = await service.getCharacteristic(PIXEL_UUID);
       pixelInput.oninput = () => sendPixel(pixel);
@@ -307,6 +307,9 @@
           (_, i) => spec.bytes ? data.getUint8(offset + i) : data.getFloat32(offset + 4 * i, true));
         if (EVENTS.has(name) && before && latest[name][0] > before[0]) {
           lastSeen[name] = performance.now();
+        }
+        if (name === 'beat' && before && latest[name][1] > before[1]) {
+          lastBeat = performance.now();  // the board counted a beat: the dot grid flashes
         }
         offset += size * count;
         counts[name] = (counts[name] || 0) + 1;
@@ -371,6 +374,10 @@
           const label = values.length ? (values[loudest] ? `loudest ${bandName(loudest)}` : 'quiet') : '';
           cells.push(label.padStart(15));  // as wide as 'loudest 1.8 kHz', so the columns never shift
         }
+        if (name === 'beat' && values.length) {
+          cells[0] = (values[0] ? `${Math.round(values[0])} BPM` : 'no steady beat').padStart(14);
+          cells[1] = String(values[1]);
+        }
         if (name === 'pressure' && values.length) {
           cells[1] = `≈ ${Math.round(feetAboveSeaLevel(values[0]))} ft above sea level`;
         }
@@ -428,6 +435,8 @@
     const SPECTRUM_ROWS = 9, SPECTRUM_FALL = 9;
     const spectrumCanvas = document.getElementById('spectrum');
     const spectrumPeaks = new Array(13).fill(0);
+    const BEAT_FLASH_MS = 150;  // how long the grid's backdrop glows after a beat
+    let lastBeat = -Infinity;   // when the board last counted a beat
     let lastSpectrumDraw = performance.now();
 
     function drawSpectrum() {
@@ -438,6 +447,9 @@
       const context = spectrumCanvas.getContext('2d');
       const cell = spectrumCanvas.width / levels.length;
       context.clearRect(0, 0, spectrumCanvas.width, spectrumCanvas.height);
+      const glow = Math.max(0, 1 - (now - lastBeat) / BEAT_FLASH_MS);
+      context.fillStyle = `rgba(255, 255, 255, ${0.3 * glow})`;
+      context.fillRect(0, 0, spectrumCanvas.width, spectrumCanvas.height);
       levels.forEach((level, column) => {
         const height = Math.round(level / 255 * SPECTRUM_ROWS);
         spectrumPeaks[column] = Math.max(spectrumPeaks[column] - fall, height);

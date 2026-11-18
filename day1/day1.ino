@@ -12,6 +12,7 @@
 //   Calibration.ino   this board's sensor offsets, kept in its flash
 //   MotionEvents.ino  taps, double taps, falls and steps, spotted by the motion chip itself
 //   Sound.ino         the microphone's loudness and its spectrum
+//   Beat.ino          finds the beat in music and flashes the back NeoPixel on it
 //   Touch.ino         the P0, P1 and P2 ring pads as touch pads
 //   Plugins.ino       notices STEMMA QT boards being plugged in
 //   Bluetooth.ino     how the readings get to the page
@@ -91,6 +92,7 @@ BLECharacteristic touchChar("c10e0013-5a7e-4a6b-9f3e-0b6f2d9a1c01");
 BLECharacteristic nameChar("c10e0014-5a7e-4a6b-9f3e-0b6f2d9a1c01");  // read/write: the board's name, text
 BLECharacteristic eventsChar("c10e0015-5a7e-4a6b-9f3e-0b6f2d9a1c01");
 BLECharacteristic spectrumChar("c10e0016-5a7e-4a6b-9f3e-0b6f2d9a1c01");  // bytes: one per band
+BLECharacteristic beatChar("c10e0017-5a7e-4a6b-9f3e-0b6f2d9a1c01");
 
 // The motion readings, sent together in one packet. The NED pair are the raw readings
 // rotated into the world frame by the orientation and averaged there, where gravity and
@@ -122,11 +124,13 @@ struct Readings {
   float touch[3];       // P0, P1, P2 pad counts, higher when touched
   float events[4];      // taps, double taps, falls and steps since power-on; sent only when
                         // one goes up, so the page notes when
+  float beat[2];        // the music's tempo in beats per minute, 0 when there is no steady beat, and
+                        // beats counted since power-on; sent on each beat
   uint8_t buttons;      // bit 0 = A, bit 1 = B
   uint8_t spectrum[SPECTRUM_BANDS];  // loudness of each band, 100 Hz to 8 kHz, 0 to 255
 };
 Readings readings;
-char logLine[64];
+char logLine[64];  // the log line on its way to the page; Log.ino has the ones waiting
 
 // Our BLE "database". Each value lives in its characteristic, where anyone can read it.
 // publish() marks a value changed and flushPublished() sends it to subscribers once the
@@ -154,6 +158,7 @@ Published published[] = {
   {touchChar, readings.touch, sizeof(readings.touch)},
   {eventsChar, readings.events, sizeof(readings.events)},
   {spectrumChar, readings.spectrum, sizeof(readings.spectrum)},
+  {beatChar, readings.beat, sizeof(readings.beat)},
   {logChar, logLine, sizeof(logLine)},
 };
 
@@ -164,12 +169,13 @@ const char *STAGE_NAMES[STAGE_COUNT] = {"nothing", "BLE", "the IMU", "the magnet
 volatile Stage stage = STAGE_NONE;
 
 char bleName[24];     // CLUE-<name>, shown on the top line
-bool bleStarted = false;
 int readingsTop = 0;  // screen row where the live readings start, below any warnings
 
 Adafruit_ST7789 display(&SPI1, TFT_CS_PIN, TFT_DC_PIN, TFT_RESET_PIN);
 GFXcanvas16 lineCanvas(240, 16);  // one line of size-2 text, drawn in RAM then pushed as a block
 Adafruit_NeoPixel pixel(1, NEOPIXEL_PIN, NEO_GRB + NEO_KHZ800);
+volatile uint32_t backColor = 0;  // the color the page's picker asked for; Beat.ino flashes over it
+volatile bool backColorChanged = false;
 Adafruit_APDS9960 apds9960;
 Adafruit_BMP280 bmp280;
 
@@ -212,6 +218,7 @@ void loop() {
   stillRunning();
 
   stage = STAGE_BLE;
+  sendLog();
   flushPublished();
 
   stage = STAGE_IMU;
@@ -227,6 +234,10 @@ void loop() {
     }
     if (spectrumChar.notifyEnabled()) {
       sendSpectrum();
+    }
+    if (backColorChanged) {
+      backColorChanged = false;
+      showBackColor();
     }
   }
   if (every(1000 / DEBUG_HZ, lastDebugMs)) {
@@ -262,7 +273,6 @@ void loop() {
   if (every(1000 / SCREEN_LINES_HZ, lastScreenMs)) {
     stage = STAGE_SCREEN;
     showNextLine();
-    analogWrite(LED_BUILTIN, 255 - millis() % 256);  // the factory demo's red LED pulse
   }
 }
 
@@ -348,9 +358,15 @@ void handleButtons() {
 }
 
 // Runs when a phone or web page writes three bytes, red green blue, to the pixel
-// characteristic. The fixed length means any other size was already rejected.
+// characteristic. The fixed length means any other size was already rejected. This runs in
+// the Bluetooth library's task, so it only notes the color; loop() lights the pixel.
 void onPixelWrite(uint16_t connHandle, BLECharacteristic *chr, uint8_t *rgb, uint16_t len) {
-  pixel.fill(pixel.Color(rgb[0], rgb[1], rgb[2]));
+  backColor = pixel.Color(rgb[0], rgb[1], rgb[2]);
+  backColorChanged = true;
+}
+
+void showBackColor() {
+  pixel.fill(backColor);
   pixel.show();
 }
 

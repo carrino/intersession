@@ -42,13 +42,14 @@ void onStallCheck(TimerHandle_t timer) {
   }
   ticksStuck++;
   if (ticksStuck == 1) {
+    // The retention register survives the reset: the stage in the low bits, the count above.
+    // First, so it is kept even if saying so goes wrong.
+    sd_power_gpregret_clr(1, 0xFF);
+    sd_power_gpregret_set(1, stage | min(stallReboots + 1, 15) << 4);
     char message[64];
     snprintf(message, sizeof(message), "Stuck in %s", STAGE_NAMES[stage]);
     warn(message);
-    notify(find(logChar));  // the stuck loop will not flush it, so send it from here
-    // The retention register survives the reset: the stage in the low bits, the count above.
-    sd_power_gpregret_clr(1, 0xFF);
-    sd_power_gpregret_set(1, stage | min(stallReboots + 1, 15) << 4);
+    sendNewestLineNow();  // the stuck loop will not send it
   } else if (ticksStuck == 2) {
     Bluefruit.disconnect(Bluefruit.connHandle());
   } else {
