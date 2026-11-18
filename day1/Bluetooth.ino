@@ -15,9 +15,14 @@
 // What the board asks the laptop for once connected. The interval is how often the two
 // radios meet, in units of 1.25 ms: each meeting carries only a handful of packets and the
 // board has about 130 a second to send. Left alone, Windows settles on 60 ms, about 17
-// meetings a second, and readings get skipped; 15 ms is four times that. Each request is
-// made up to LINK_REQUESTS times, one per slow tick, before taking no for an answer.
+// meetings a second, and readings get skipped; 15 ms is four times that. The timeout is
+// how long each side waits in silence before it gives the link up for dead, in units of
+// 10 ms. Windows picks 9.6 s, so when a laptop walks off or a page goes away without
+// hanging up, the board sat that long before advertising again; 2 s is plenty at 15 ms.
+// Each request is made up to LINK_REQUESTS times, one per slow tick, before taking no for
+// an answer.
 const int LINK_INTERVAL = 12;
+const int LINK_TIMEOUT = 200;
 const int LINK_REQUESTS = 6;
 
 void setupBle() {
@@ -73,9 +78,12 @@ void noteLinkSettings() {
   if (conn->getPHY() != BLE_GAP_PHY_2MBPS && phyRequests < LINK_REQUESTS && conn->requestPHY(BLE_GAP_PHY_2MBPS)) {
     phyRequests++;
   }
-  // The same goes for the interval. Zero is no skipped meetings; the timeout stays as it is.
-  if (conn->getConnectionInterval() > LINK_INTERVAL && intervalRequests < LINK_REQUESTS &&
-      conn->requestConnectionParameter(LINK_INTERVAL, 0, conn->getSupervisionTimeout())) {
+  // The same goes for the interval and the timeout, which are asked for together; zero is
+  // no skipped meetings. The laptop takes both or neither, so if it has refused half the
+  // tries, the rest ask for the interval with the timeout it already has.
+  bool tooSlow = conn->getConnectionInterval() > LINK_INTERVAL || conn->getSupervisionTimeout() > LINK_TIMEOUT;
+  uint16_t timeout = intervalRequests < LINK_REQUESTS / 2 ? LINK_TIMEOUT : conn->getSupervisionTimeout();
+  if (tooSlow && intervalRequests < LINK_REQUESTS && conn->requestConnectionParameter(LINK_INTERVAL, 0, timeout)) {
     intervalRequests++;
   }
   if (conn->getMtu() != lastMtu || conn->getConnectionInterval() != lastInterval ||
