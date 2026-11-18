@@ -65,7 +65,7 @@ You should now see **Adafruit CLUE** under Tools > Board > Adafruit nRF52 Boards
    in the air because most tables have steel in them, which throws the magnetometer off;
    the set-down step only uses the gyro, so the table does not matter there.
 6. Plug a STEMMA QT sensor into the port on the bottom edge. Within half a second the
-   screen's `Plug:` line and the page's plug-ins row name it, and the log says when it was
+   screen's `Plug-in:` line and the page's plug-ins row name it, and the log says when it was
    plugged in or pulled out. Plug it in with the board off when you can: pushing the
    connector in while a sensor is being read can jam the I2C bus, and the board then spends
    two seconds noticing and rebooting itself. Reading the sensor is the next step and takes

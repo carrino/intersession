@@ -42,11 +42,16 @@ void checkPlugins() {
 
 // The plug-in sensors answering right now, by name.
 void showPlugins() {
-  lineCanvas.print("Plug:");
+  bool any = false;
+  lineCanvas.print("Plug-in:");
   for (Sensor &plugin : plugins) {
     if (plugin.answering) {
       lineCanvas.print(" ");
       lineCanvas.print(plugin.name);
+      any = true;
     }
+  }
+  if (!any) {
+    lineCanvas.print(" none");
   }
 }

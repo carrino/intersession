@@ -14,8 +14,8 @@
 //   3. Phase. A tempo alone does not say where the beats are. Lay a comb with teeth one
 //      beat apart over the spikes and slide it until the teeth sit on the most of them.
 //      A metronome running at the tempo is nudged toward that spot, and it is the
-//      metronome that flashes the light. So the flash lands on the beat, not after it,
-//      and keeps going through a bar where the drums drop out.
+//      metronome that flashes the light. So the flash lands on the beat, not after it.
+// The flashing stops a second or two after the last drum hit.
 // Music often fits half or double its tempo just as well, so the light may flash on every
 // other beat of a fast song, or twice a beat on a slow one.
 
@@ -25,10 +25,13 @@ const float BEAT_MIN_BPM = 60, BEAT_MAX_BPM = 180;
 const float BEAT_FAVORITE_BPM = 120;   // when half or double time fit about as well, lean toward this
 const float BEAT_MIN_MATCH = 0.3;      // how well the spikes must repeat, 0 to 1, to call it a beat
 const int BEAT_CONFIRM = 3;            // tempo checks (half a second each) that must agree before a tempo is believed
-const int BEAT_PATIENCE = 6;           // tempo checks without a match before giving up on the beat
+const int BEAT_PATIENCE = 3;           // tempo checks without a match before giving up on the beat
+const int BEAT_RECENT = 188;           // blocks, three seconds: the beat has to show in these too, to count as still going,
+const float BEAT_MIN_RECENT = 0.2;     // at least this well: lower than BEAT_MIN_MATCH, as three seconds is a rougher measure
 const float BEAT_STICKY = 1.3;         // how much the tempo already found is favored over a new one
 const float BEAT_QUIET_DB = 35;        // a band under this counts as silent, so hiss makes no onsets
-const float BEAT_MIN_ONSET = 10;       // dB, summed over the bands: no spike this big for three seconds means the music stopped
+const float BEAT_STOP_SECONDS = 1.5;   // this long without a hit means the music stopped
+const float BEAT_MIN_ONSET = 10;       // a hit is an onset of at least this many dB, summed over the bands
 const float BEAT_LEAD = 0.5;           // blocks the flash goes early, to make up for the time it takes a hit to get here
 const float BEAT_FADE = 0.85;          // the flash keeps this much brightness each block: gone in a third of a second
 
@@ -80,8 +83,9 @@ void findBeat() {
   static int agreed = 0;       // checks in a row that found it
   float match = 0;
   float period = tidyOnsets() ? findTempo(match) : 0;
+  bool found = match >= BEAT_MIN_MATCH && matchLately(period) >= BEAT_MIN_RECENT;  // and still going, not just remembered
   bool stopped = !heardLately();
-  if (stopped || match < BEAT_MIN_MATCH) {
+  if (stopped || !found) {
     agreed = 0;
     if (beatPeriod > 0 && (stopped || ++beatMisses >= BEAT_PATIENCE)) {
       beatPeriod = 0;  // the music stopped, or lost its beat
@@ -117,14 +121,30 @@ bool sameTempo(float a, float b) {
   return fabsf(a - b) < 0.06f * b;
 }
 
-// Whether anything like a drum hit arrived in the last three seconds.
+// Whether a drum hit arrived lately: the quick way to tell the music has stopped.
 bool heardLately() {
-  for (int i = 0; i < 3 * BEAT_FRAME_HZ; i++) {
+  for (int i = 0; i < BEAT_STOP_SECONDS * BEAT_FRAME_HZ; i++) {
     if (onsetAgo(i) >= BEAT_MIN_ONSET) {
       return true;
     }
   }
   return false;
+}
+
+// How well the newest three seconds of spikes repeat at this tempo, 0 to 1. When the music
+// stops but the room stays noisy, the six seconds still hold a beat for a while; these
+// three lose it within a second or two. The better of the two whole numbers of blocks
+// either side of the period is used.
+float matchLately(float period) {
+  float best = 0;
+  for (int shift = period; shift <= period + 1; shift++) {
+    float sum = 0;
+    for (int i = 0; i + shift < BEAT_RECENT; i++) {
+      sum += spikes[i] * spikes[i + shift];
+    }
+    best = max(best, sum / (BEAT_RECENT - shift));
+  }
+  return best;
 }
 
 // Copies the onsets into spikes, newest first, each blurred into its neighbors and with
