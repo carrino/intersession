@@ -29,6 +29,9 @@ void setupBle() {
   // Max MTU 247 so the 60-byte vectors packet fits, and room to queue 8 notifications.
   Bluefruit.configPrphConn(247, BLE_GAP_EVENT_LENGTH_DEFAULT, 8, 1);
   Bluefruit.begin();
+  // The library would blink the red LED while advertising and hold it on while connected.
+  // The name on the screen's top line already shows that, yellow or green, so leave it off.
+  Bluefruit.autoConnLed(false);
 
   sensorService.begin();  // characteristics join the most recently begun service
   for (Published &p : published) {
