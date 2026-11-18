@@ -13,8 +13,10 @@ stays home. Check with the maker space ahead of time about what they have (botto
 - The Digi-Key order, for what Adafruit had run out of: five 200 mm STEMMA QT cables, four
   STEMMA QT to male header cables for breadboards, and the 2.1 mm barrel jack to screw
   terminal adapter that lets the 5 V supply feed a NeoDriver's terminal block.
-- A LiPo charger, such as Adafruit's USB Micro-LiPo charger: the CLUE has no charging
-  circuit, so the three LiPo batteries cannot be recharged without one. Not ordered yet.
+- A Feather board to charge the LiPo batteries: the CLUE has no charging circuit, and a
+  Feather charges whatever is plugged into its battery jack over USB. Most Feathers charge
+  at 100 or 200 mA, so a 1200 mAh battery takes six to twelve hours: charge all three
+  before the trip.
 - Hookup wire: the NeoPixel rings and sticks have solder pads, not connectors.
 - USB-C to micro-USB data cables, one per person plus spares, and two USB-A to micro-USB
   for any older laptop. The CLUE's port is micro-USB. Test and mark each one: a

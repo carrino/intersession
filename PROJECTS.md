@@ -3,7 +3,8 @@
 Seeds for Friday's conversation and the week. A good week-long project has a small core
 that works by the middle of the week, a demo anyone can try at the end, and stretch goals
 for the time in between. Most of these work with only what is on the CLUE; the rest need
-one part from the list in [`FRIDAY.md`](FRIDAY.md).
+one part from the list in [`FRIDAY.md`](FRIDAY.md). Some build on a tab of day 1's sketch
+that already does the hard part, named where they do.
 
 ## With just the CLUE
 
@@ -25,6 +26,15 @@ one part from the list in [`FRIDAY.md`](FRIDAY.md).
 | Reaction game | Buttons and screen: who presses first | Buttons, screen, speaker | Leaderboard on the page |
 | Step counter | The motion chip counts steps itself; write your own detector and compare | Accelerometer | Steps per minute, distance |
 | Tap commands | Tap, double tap and drop do different things | The motion chip's tap and fall detectors | A secret knock |
+| Tuner | Names the note you sing or play and shows sharp or flat | Microphone, the spectrum in `Sound.ino` | Whistle high or low to steer a game on the page |
+| Clap-along coach | Shows the tempo of music or of your clapping, and whether you are rushing | Microphone, the beat finder in `Beat.ino` | A metronome you set by tapping the board |
+| Air drums | Swing the board like a stick and the laptop plays the drum | Gyro, a web page that makes the sound | Different drums for different directions |
+| Posture coach | Clipped to a shirt, it beeps after ten seconds of slouching | Day 1's orientation, speaker | A day's score on the page |
+| Elevator profiler | Rides an elevator and plots its speed and height | Pressure sensor, accelerometer | Compare the two sensors' answers; find the fastest elevator |
+| Door counter | Counts people passing the board | Proximity sensor | Tell in from out with the gesture sensor |
+| Desk guard | Sounds off and tells your phone when someone moves it or opens the drawer it is in | Accelerometer, light sensor, Bluetooth | Arm and disarm with a secret knock |
+| Black box | Records a trip in a backpack, a mailed box or a paper rocket to flash; replay it on the page | Accelerometer, pressure sensor, `Storage.ino` | Find the roughest moment |
+| Egg and spoon race | Walk a course holding the board level; tilts and jolts cost points | Day 1's orientation, the step counter | Live leaderboard for the whole class |
 
 ## With one part from the order
 
@@ -45,6 +55,39 @@ one part from the list in [`FRIDAY.md`](FRIDAY.md).
 | Desk lamp | True white you dim with the touch pads | NeoPixel stick (RGBW) | Warm to cool by mixing in color |
 | Light strip | A meter of NeoPixels that reacts to sound or motion | NeoDriver, a strip, the 5 V supply | Music visualizer from the microphone |
 | Scrolling sign | Text or a live sensor graph on a 13×9 color matrix | IS31FL3741 | Snake, steered with the ANO dial |
+| Spectrum display | The page's dot grid on real LEDs: the board already makes 13 bands and the matrix is 13 wide | IS31FL3741 | Flash the whole matrix on the beat |
+| Beat you can feel | The motor taps out the beat of music playing in the room | DRV2605L and motor, the beat finder | A wristband on a battery |
+| Catch the light | One LED races round the ring; press the button when it reaches the top | NeoPixel ring | Gets faster each round; two players |
+| Timer ring | The ring empties as time runs down, then flashes | NeoPixel ring | Set the time with a tilt or the touch pads |
+| Speed trap | Clocks a toy car or a rolling ball from how fast the distance changes | VL53L1X | Chart the run and find the acceleration |
+| Water level | Foil strips on the outside of a cup sense the water through it | MPR121 | Fill-me reminder for a plant |
+| Plant in a jar | Watch a plant take in CO2 in the light and give it back in the dark | SCD-43 | Compare two plants; the same with a person breathing |
+| Sunscreen tester | How much UV gets through sunglasses, a window, or sunscreen on cling film | LTR390 | Rank brands; SPF from the numbers |
+| Cooling curve | Logs a hot drink cooling without touching it and predicts when it is drinkable | MLX90632 | Does a lid, a spoon or blowing help most? |
+| Satellite clock | The time, to the second, from GPS satellites | PA1010D | Speed and heading for a bike |
+| Treasure hunt | An arrow points toward a hidden spot outdoors and says how far | PA1010D, NeoPixel ring or the screen | Hide one for another team |
+
+## Two boards together
+
+| Project | What it does | Uses | Stretch goal |
+| --- | --- | --- | --- |
+| Light telegraph | One board blinks its LEDs; another reads them with its color sensor and shows the message | White LEDs or NeoPixel, color sensor | Faster codes; colors as extra bits; error checking |
+| Remote hands | Tilt one board and the other mirrors it: its screen, its ring, its motor | Bluetooth between boards, day 1's orientation | Steer something on the second board |
+| Hot and cold | One board is hidden; the other beeps faster as it gets closer, by radio signal strength | Bluetooth between boards | Three hiders, one seeker |
+
+Two boards talking to each other over Bluetooth is new code: one of them has to play the
+laptop's part. Leave a day for it.
+
+## A reach
+
+These might not work, which is part of the point. Try the core on day one before
+committing.
+
+| Project | What it does | Uses | The hard part |
+| --- | --- | --- | --- |
+| Pulse reader | A fingertip on the color sensor, lit by the white LEDs, shows a heartbeat | Color sensor, white LEDs | The pulse is a ripple of about 1% on a signal that moves when the finger does |
+| Room mapper | Sweep the board round a room and the page draws the walls | VL53L1X, day 1's orientation | Lining up each distance with the heading it was taken at |
+| Vowel spotter | Tells "ee" from "oo" from "ah" by the shape of the spectrum | Microphone, the spectrum | Voices differ; it needs training on each speaker |
 
 ## Questions to sharpen an idea
 
