@@ -2,7 +2,27 @@
 // sensors and every reading published over Bluetooth LE for orientation.html.
 //
 // Needs the Adafruit nRF52 board package and the libraries listed in README.md.
-// The Quaternion and MagCalibration files sit next to this sketch and compile with it.
+//
+// This file is the whole picture: the pins, the list of readings, setup() and loop(), and
+// the sensors that take one library call to read. Anything that takes more than that has
+// its own tab next to this one, with a header saying what it adds and why. Open the ones
+// your project uses:
+//
+//   Orientation.ino   which way the board is facing, from the gyro, accelerometer and compass
+//   Calibration.ino   this board's sensor offsets, kept in its flash
+//   MotionEvents.ino  taps, double taps, falls and steps, spotted by the motion chip itself
+//   Sound.ino         the microphone's loudness and its spectrum
+//   Touch.ino         the P0, P1 and P2 ring pads as touch pads
+//   Plugins.ino       notices STEMMA QT boards being plugged in
+//   Bluetooth.ino     how the readings get to the page
+//   Name.ino          a name for each board
+//   Screen.ino        the readings on the board's own screen
+//   Log.ino           what the board has to say: note() and warn()
+//   Watchdog.ino      gets the board going again by itself when the loop stops
+//
+// The tabs are all one program: the Arduino IDE joins them to the end of this file, so
+// they share everything declared here. Each keeps its own constants and variables at its
+// top, and the rest of the program uses it only through its functions.
 
 #include <Adafruit_GFX.h>
 #include <Adafruit_ST7789.h>
@@ -28,14 +48,6 @@ const int NEOPIXEL_PIN = 18;
 const int SPEAKER_PIN = 46;
 const int WHITE_LED_PIN = 43;
 const int IMU_INTERRUPT_PIN = 45;  // the IMU's INT1 line
-const int TOUCH_PINS[3] = {0, 1, 2};  // the P0, P1, P2 ring pads on the bottom edge
-
-// Touch sensing on the pads, the same trick CircuitPython uses: charge a pad, let it
-// float, and count how long it stays high. A finger adds capacitance and a leak to
-// ground, so the count changes. The count stops here so a pad that never falls (nothing
-// to discharge it; a 1 megohm resistor from the pad to GND fixes that) cannot stall the loop.
-const int TOUCH_SAMPLES = 4;
-const int TOUCH_MAX_TICKS = 2000;
 
 // Every sensor is on the one I2C bus. The addresses are checked twice a second to catch
 // a sensor that has stopped answering, since the sensor libraries do not report that.
@@ -47,31 +59,7 @@ struct Sensor {
 Sensor sensors[] = {
   {"APDS9960", 0x39, true}, {"LSM6DS", 0x6A, true}, {"LIS3MDL", 0x1C, true}, {"SHT30", 0x44, true}, {"BMP280", 0x77, true},
 };
-
-// STEMMA QT boards from the class order that a student may plug into the port on the
-// bottom edge, known by their I2C address. Each is a bit of readings.plugins, in this
-// order. The MPR121 and the DRV2605 both answer at 0x5A, so the address alone cannot tell
-// those two apart.
-Sensor plugins[] = {
-  {"VL53L1X", 0x29, false},         // distance
-  {"NeoDriver", 0x60, false},       // NeoPixel strip driver
-  {"MPR121/DRV2605", 0x5A, false},  // touch pads / haptic motor
-  {"ANO encoder", 0x49, false},     // dial with buttons
-  {"PA1010D", 0x10, false},         // GPS
-  {"SCD-43", 0x62, false},          // CO2
-  {"LTR390", 0x53, false},          // UV
-  {"MLX90632", 0x3A, false},        // non-contact temperature
-  {"IS31FL3741", 0x30, false},      // 13x9 RGB LED matrix
-};
 const int SHT30_ADDRESS = 0x44;
-
-// The motion chip's own tap, free-fall and step detectors, set up register by register from
-// the LSM6DS3TR-C datasheet (section 9), since the Adafruit library has no calls for them.
-const int IMU_ADDRESS = 0x6A;
-const uint8_t IMU_CTRL10_C = 0x19, IMU_WAKE_UP_SRC = 0x1B, IMU_TAP_SRC = 0x1C, IMU_STEP_COUNTER = 0x4B;
-const uint8_t IMU_TAP_CFG = 0x58, IMU_TAP_THS_6D = 0x59, IMU_INT_DUR2 = 0x5A, IMU_WAKE_UP_THS = 0x5B;
-const uint8_t IMU_FREE_FALL = 0x5D;
-const uint8_t IMU_FREE_FALL_SEEN = 0x20, IMU_SINGLE_TAP_SEEN = 0x20, IMU_DOUBLE_TAP_SEEN = 0x10;
 
 // How often each group of readings is sent, in packets per second.
 const int QUATERNION_HZ = 30;  // the orientation, plus checking the buttons, taps and falls
@@ -79,34 +67,7 @@ const int DEBUG_HZ = 10;       // accel, gyro, mag, color, proximity, mic, touch
 const int SLOW_HZ = 2;         // temperature, humidity, mag fit, stats
 const int SCREEN_LINES_HZ = 20;  // one line of the screen per tick: 11 lines refresh every 0.55 s
 
-// How many times the board asks for the 2 Mbit radio mode, one ask per slow tick, before
-// taking no for an answer.
-const int PHY_REQUESTS = 6;
-
-// How far toward the accelerometer's idea of "down" we move on each IMU sample, and how
-// far toward the magnetometer's idea of "north" on each mag reading. Small is smooth but
-// slow to fix gyro drift; large is quick but jittery.
-const float ACCEL_CORRECTION = 0.005;  // 416 times a second
-const float MAG_CORRECTION = 0.05;     // 10 times a second
-
-// The PDM driver's gain register is 0.5 dB per step with 40 as 0 dB. The default of 20
-// (-10 dB) leaves a quiet room below the converter's smallest step, so everything quiet
-// reads as the same hiss; +10 dB lifts it clear while a loud clap still fits.
-const int MIC_GAIN = 60;
-
-// Turns the mic level relative to full scale into an approximate sound pressure level:
-// the mic puts out -26 dBFS at 94 dB SPL, and the +10 dB of gain comes off again.
-const float MIC_DB_OFFSET = 94 + 26 - 10;
-
-// The sound spectrum. The mic delivers 16,000 samples a second in blocks of 256 (16 ms).
-// An FFT of each block gives 128 bins, each 62.5 Hz wide, up to 8 kHz; they are added up
-// into 13 bands spaced like a piano's octaves, from 100 Hz to 8 kHz. Each band is sent as a
-// byte: 0 at SPECTRUM_FLOOR_DB, 255 at SPECTRUM_TOP_DB, in the mic reading's rough dB SPL.
-const int MIC_RATE = 16000;
-const int FFT_SIZE = 256;       // one block from the mic
-const int SPECTRUM_BANDS = 13;  // the columns of Adafruit's 13x9 matrix visualizer
-const float SPECTRUM_LOW_HZ = 100, SPECTRUM_HIGH_HZ = 8000;
-const float SPECTRUM_FLOOR_DB = 20, SPECTRUM_TOP_DB = 80;
+const int SPECTRUM_BANDS = 13;  // the bands Sound.ino splits the mic's sound into
 
 // Our BLE service, one characteristic per reading. Values are little-endian floats,
 // except buttons and pixel which are bytes. orientation.html lists the same UUIDs.
@@ -130,25 +91,6 @@ BLECharacteristic touchChar("c10e0013-5a7e-4a6b-9f3e-0b6f2d9a1c01");
 BLECharacteristic nameChar("c10e0014-5a7e-4a6b-9f3e-0b6f2d9a1c01");  // read/write: the board's name, text
 BLECharacteristic eventsChar("c10e0015-5a7e-4a6b-9f3e-0b6f2d9a1c01");
 BLECharacteristic spectrumChar("c10e0016-5a7e-4a6b-9f3e-0b6f2d9a1c01");  // bytes: one per band
-
-// One-time per-axis offsets for this board's sensors, found by the page's calibration
-// screen (hold each face of the board toward the floor, still, for a second) and kept in
-// the board's flash. Each reading becomes raw - offset. An unwritten board has all zeros,
-// which means "not calibrated": then the readings are used raw, the sphere fit and the
-// north correction stay off, and the page offers the calibration screen.
-struct Calibration {
-  float accelOffset[3];
-  float gyroOffset[3];
-  float magOffset[3];
-};
-Calibration calibration;
-const char *CALIBRATION_FILE = "/calibration.bin";
-
-// The name a student gives the board on the page, kept in flash: it advertises as
-// CLUE-<name>. Twelve characters is what fits the screen's top line after "CLUE-".
-const int MAX_NAME_LEN = 12;
-char boardName[MAX_NAME_LEN + 1];  // empty until named
-const char *NAME_FILE = "/name.txt";
 
 // The motion readings, sent together in one packet. The NED pair are the raw readings
 // rotated into the world frame by the orientation and averaged there, where gravity and
@@ -220,58 +162,16 @@ enum Stage { STAGE_NONE, STAGE_BLE, STAGE_IMU, STAGE_MAG, STAGE_LIGHT_MIC, STAGE
 const char *STAGE_NAMES[STAGE_COUNT] = {"nothing", "BLE", "the IMU", "the magnetometer", "the light sensor or mic",
                                         "the environment sensors", "the screen"};
 volatile Stage stage = STAGE_NONE;
-volatile uint32_t loopAliveMs = 0;  // when loop() last checked in
-int stallReboots = 0;               // since power-on; a reset keeps it in the retention register
-SoftwareTimer stallTimer;
 
 char bleName[24];     // CLUE-<name>, shown on the top line
 bool bleStarted = false;
 int readingsTop = 0;  // screen row where the live readings start, below any warnings
-int imuSamples = 0;   // fused since the last stats update
 
 Adafruit_ST7789 display(&SPI1, TFT_CS_PIN, TFT_DC_PIN, TFT_RESET_PIN);
 GFXcanvas16 lineCanvas(240, 16);  // one line of size-2 text, drawn in RAM then pushed as a block
 Adafruit_NeoPixel pixel(1, NEOPIXEL_PIN, NEO_GRB + NEO_KHZ800);
-
-// CLUE boards ship with one of two nearly identical motion chips.
-Adafruit_LSM6DS33 lsm6ds33;
-Adafruit_LSM6DS3TRC lsm6ds3trc;
-Adafruit_LSM6DS *imu = NULL;
-
-// The motion events, in the order of readings.events.
-enum MotionEvent { EVENT_TAP, EVENT_DOUBLE_TAP, EVENT_FALL, EVENT_STEP, EVENT_COUNT };
-uint16_t lastSteps = 0;          // the chip's own step counter at the last check
-bool motionEventsOn = false;     // only the LSM6DS3TR-C's detectors are set up
-Adafruit_LIS3MDL lis3mdl;
 Adafruit_APDS9960 apds9960;
 Adafruit_BMP280 bmp280;
-MagCalibration magCalibration;
-
-// The rotation that takes a vector in the device's frame to the world frame:
-//   world = orientation.rotate(device)
-// The device's frame is the motion chip's: x toward button A, y toward the USB plug,
-// z down through the screen. The world frame is NED: x north, y east, z down. Identity
-// is the board flat, screen up, with button A's edge toward north.
-Quaternion orientation;
-
-// Set by the IMU's data-ready interrupt, cleared when loop() takes the sample.
-// The CPU cycle counter gives a precise timestamp for when the sample was taken.
-volatile bool sampleReady = false;
-volatile uint32_t sampleCycles = 0;
-
-// Running sums of the microphone samples since last checked, kept by the PDM callback.
-volatile int64_t micSum = 0, micSumSquares = 0;
-volatile int32_t micCount = 0;
-int16_t micSamples[FFT_SIZE];
-
-// A full block of samples handed from the PDM callback to loop() for the spectrum. The
-// callback fills it only after loop() has taken the last one.
-volatile int16_t fftBlock[FFT_SIZE];
-volatile bool fftBlockReady = false;
-arm_rfft_fast_instance_f32 fft;
-float hannWindow[FFT_SIZE];
-int bandEdges[SPECTRUM_BANDS + 1];      // FFT bin where each band starts; the last is the end
-uint8_t spectrumPeaks[SPECTRUM_BANDS];  // the loudest each band got since the last send
 
 void setup() {
   Serial.begin(115200);
@@ -284,41 +184,40 @@ void setup() {
   setupDisplay();
   reportLastReset();
   InternalFS.begin();
-  loadFile(CALIBRATION_FILE, &calibration, sizeof(calibration));
-  loadFile(NAME_FILE, boardName, MAX_NAME_LEN);
+  loadCalibration();
+  loadName();
   unstickI2cBus();
   setupSensors();
   setupMic();
   setupImu();
+  // The sensor libraries leave the bus at 100 kHz, which makes the 14-byte IMU read take
+  // most of the 2.4 ms between samples; 250 kHz makes it a quarter. Not 400 kHz: the bus
+  // also runs to edge pads 19 and 20, the small fingers between the 3V and GND rings, and
+  // a finger resting there adds enough capacitance to corrupt bits at that speed, which
+  // leaves a sensor holding the bus and the board rebooting. (The nRF52840's own 400 kHz
+  // timing is also out of spec, erratum 219.)
+  Wire.setClock(250000);
   setupBle();
   readingsTop = display.getCursorY() + 8;
   startWatchdog();
-  stallTimer.begin(500, onStallCheck);
-  stallTimer.start();
+  startStallCheck();
   char message[64];
-  snprintf(message, sizeof(message), "Started with the %s, %s", imu == &lsm6ds3trc ? "LSM6DS3TR-C" : "LSM6DS33",
+  snprintf(message, sizeof(message), "Started with the %s, %s", imuName(),
            calibrated() ? "calibrated" : "not calibrated: open the page");
   note(message);
 }
 
 void loop() {
   static uint32_t lastQuaternionMs = 0, lastDebugMs = 0, lastSlowMs = 0, lastScreenMs = 0;
-  NRF_WDT->RR[0] = WDT_RR_RR_Reload;  // tell the watchdog we are still running
-  loopAliveMs = millis();            // and the stall timer
+  stillRunning();
 
   stage = STAGE_BLE;
   flushPublished();
 
-  // Data-ready stays high until we read, so also go when it is already high: a sample
-  // that landed before the interrupt was attached never produces a rising edge.
   stage = STAGE_IMU;
-  if (sampleReady || digitalRead(IMU_INTERRUPT_PIN)) {
-    readImu();
-  }
+  readImu();
   stage = STAGE_LIGHT_MIC;
-  if (fftBlockReady) {
-    updateSpectrum();
-  }
+  updateSpectrum();
   if (every(1000 / QUATERNION_HZ, lastQuaternionMs)) {
     publish(quaternionChar);
     handleButtons();
@@ -349,12 +248,13 @@ void loop() {
     stage = STAGE_ENVIRONMENT;
     readEnvironment();
     fitMag();
-    updateStats();
+    updateImuStats();
     publish(temperatureChar);
     publish(humidityChar);
     publish(magFitChar);
     publish(statsChar);
     checkSensorsAnswer();
+    checkPlugins();
     noteLinkSettings();
     stage = STAGE_SCREEN;
     showBleStatus();
@@ -366,244 +266,35 @@ void loop() {
   }
 }
 
-// ---- Motion sensors and orientation ----
+// ---- The sensors that take one call to read ----
 
-void onImuDataReady() {
-  sampleCycles = DWT->CYCCNT;
-  sampleReady = true;
-}
-
-void readImu() {
-  static uint32_t lastSampleCycles = DWT->CYCCNT;
-  sampleReady = false;
-  imuSamples++;
-  float dt = (float)(sampleCycles - lastSampleCycles) / SystemCoreClock;
-  lastSampleCycles = sampleCycles;
-
-  sensors_event_t accelEvent, gyroEvent, tempEvent;
-  imu->getEvent(&accelEvent, &gyroEvent, &tempEvent);
-  float *accel = accelEvent.acceleration.v;
-  float *gyro = gyroEvent.gyro.v;
-  if (calibrated()) {
-    for (int i = 0; i < 3; i++) {
-      accel[i] -= calibration.accelOffset[i];
-      gyro[i] -= calibration.gyroOffset[i];
-    }
+// The sensors are all on the board, so only a problem gets mentioned on the screen.
+void setupSensors() {
+  // Color: 50 ms of light gathering per reading, five times the default, so an object lit
+  // by the front LEDs gives counts in the hundreds rather than single digits.
+  if (apds9960.begin(50)) {
+    apds9960.enableColor(true);
+    apds9960.enableProximity(true);
+  } else {
+    warn("APDS9960 missing");
   }
-
-  updateOrientation(accel, gyro, dt);
-  readings.quaternion[0] = orientation.a;
-  readings.quaternion[1] = orientation.b;
-  readings.quaternion[2] = orientation.c;
-  readings.quaternion[3] = orientation.d;
-
-  copyVector(readings.vectors.accel, accel);
-  copyVector(readings.vectors.gyro, gyro);
-  float accelNed[3];
-  toWorldFrame(accelNed, accel);
-  lowPass(readings.vectors.accelNed, accelNed, 0.05);  // about the last 50 ms at 416 Hz
-}
-
-// Multiplying the orientation on the right applies a rotation in the device's frame;
-// multiplying on the left applies one in the world frame.
-void updateOrientation(const float accel[3], const float gyro[3], float dt) {
-  // The gyro measures how the device turned, in the device's frame, in radians per
-  // second. Apply that turn in full.
-  Quaternion turn = Quaternion::from_axis_angle(gyro[0] * dt, gyro[1] * dt, gyro[2] * dt);
-  orientation *= turn;
-  orientation.normalize();
-
-  // The accelerometer feels the push holding the board up, so minus its reading is down
-  // in the device's frame. Rotate that into the world, where down is really (0, 0, 1),
-  // and nudge the orientation a fraction of the way from where we think down is to there.
-  Quaternion measuredDown(-accel[0], -accel[1], -accel[2]);
-  Quaternion down = orientation.rotate(measuredDown.normalize());
-  Quaternion correction = down.rotation_between_vectors(Quaternion(0, 0, 1));
-  orientation = correction.fractional(ACCEL_CORRECTION) * orientation;
-
-  readings.stats[1] = acos(constrain(down.d, -1, 1)) * 180 / PI;
-}
-
-// The accelerometer cannot tell which way is north; the magnetometer can, once its offset
-// is known. Rotate the reading into the world, keep only its horizontal part (Earth's
-// field also points steeply into the ground), and nudge the orientation about the
-// vertical axis a fraction of the way from where that points to north, (1, 0, 0).
-void correctNorth(const float mag[3]) {
-  Quaternion field = orientation.rotate(Quaternion(mag[0], mag[1], mag[2]));
-  field.d = 0;
-  if (field.norm() < 5) {
-    return;  // almost vertical: no usable sense of north in this reading
+  Wire.beginTransmission(SHT30_ADDRESS);
+  Wire.write(0x21);  // periodic mode: measure once a second, high repeatability
+  Wire.write(0x30);
+  if (Wire.endTransmission() != 0) {
+    warn("SHT30 missing");
   }
-  field.normalize();
-  Quaternion correction = field.rotation_between_vectors(Quaternion(1, 0, 0));
-  orientation = correction.fractional(MAG_CORRECTION) * orientation;
-}
-
-void updateStats() {
-  static bool imuSilent = false;
-  readings.stats[0] = imuSamples * SLOW_HZ;
-  if ((imuSamples == 0) != imuSilent) {
-    imuSilent = imuSamples == 0;
-    imuSilent ? warn("No IMU samples") : note("IMU samples back");
-  }
-  imuSamples = 0;
-}
-
-// An address-only I2C transfer, the thing an I2C scanner does: a live sensor acknowledges
-// it, a dead one does not. Logs each sensor's first miss and its recovery.
-void checkSensorsAnswer() {
-  char message[64];
-  for (Sensor &sensor : sensors) {
-    bool answering = answers(sensor.address);
-    if (answering != sensor.answering) {
-      sensor.answering = answering;
-      snprintf(message, sizeof(message), "%s %s", sensor.name, answering ? "back" : "not answering");
-      answering ? note(message) : warn(message);
-    }
-  }
-
-  // The same check finds a plug-in sensor the moment it is plugged in or pulled out.
-  int plugged = 0;
-  for (int i = 0; i < (int)(sizeof(plugins) / sizeof(plugins[0])); i++) {
-    bool answering = answers(plugins[i].address);
-    if (answering != plugins[i].answering) {
-      plugins[i].answering = answering;
-      snprintf(message, sizeof(message), "%s %s", plugins[i].name, answering ? "plugged in" : "unplugged");
-      note(message);
-    }
-    plugged |= answering << i;
-  }
-  if (plugged != readings.plugins) {
-    readings.plugins = plugged;
-    publish(pluginsChar);
+  // Pressure: the datasheet's indoor-navigation oversampling (about 26 readings a second)
+  // with a light filter, so it is steady to a few centimeters and follows a lift in about
+  // 0.2 s. The page turns it into feet above sea level.
+  if (bmp280.begin()) {
+    bmp280.setSampling(Adafruit_BMP280::MODE_NORMAL, Adafruit_BMP280::SAMPLING_X2,
+                       Adafruit_BMP280::SAMPLING_X16, Adafruit_BMP280::FILTER_X4,
+                       Adafruit_BMP280::STANDBY_MS_1);
+  } else {
+    warn("BMP280 missing");
   }
 }
-
-// Whether a chip at this address acknowledges its name being called on the I2C bus.
-bool answers(uint8_t address) {
-  Wire.beginTransmission(address);
-  return Wire.endTransmission() == 0;
-}
-
-// Raw until the board is calibrated. After that the stored offset comes off, the sphere
-// fit watches for anything the stored offset missed (its own offset should stay near
-// zero), and the reading steers north.
-void readMag() {
-  sensors_event_t magEvent;
-  lis3mdl.getEvent(&magEvent);
-  float *mag = magEvent.magnetic.v;
-  if (calibrated()) {
-    for (int i = 0; i < 3; i++) {
-      mag[i] -= calibration.magOffset[i];
-    }
-    magCalibration.add(mag, readings.vectors.accel);
-  }
-  float *corrected = readings.vectors.mag;
-  for (int i = 0; i < 3; i++) {
-    corrected[i] = mag[i] - magCalibration.offset[i];
-  }
-  float strength = sqrt(corrected[0] * corrected[0] + corrected[1] * corrected[1] + corrected[2] * corrected[2]);
-  if (calibrated() && strength > 20 && strength < 70) {  // Earth's field, not a desk or a magnet
-    correctNorth(corrected);
-  }
-  float magNed[3];
-  toWorldFrame(magNed, readings.vectors.mag);
-  lowPass(readings.vectors.magNed, magNed, 0.2);  // about the last half second at 10 Hz
-}
-
-// Refit the magnetometer's hard-iron offset. The fit only switches on once every face of
-// the board has been pointed at the floor; until then the offset stays at zero.
-void fitMag() {
-  static bool locked = false;
-  if (magCalibration.solve() && !locked) {
-    locked = true;
-    char message[64];
-    snprintf(message, sizeof(message), "Mag fit locked: offset %.0f %.0f %.0f, field %.0f uT", magCalibration.offset[0],
-             magCalibration.offset[1], magCalibration.offset[2], magCalibration.radius);
-    note(message);
-  }
-  copyVector(readings.magFit, magCalibration.offset);
-  readings.magFit[3] = magCalibration.radius;
-  readings.magFit[4] = magCalibration.facesSeen();
-}
-
-// Rotates a vector from the device's frame into the world frame.
-void toWorldFrame(float dest[3], const float v[3]) {
-  Quaternion world = orientation.rotate(Quaternion(v[0], v[1], v[2]));
-  dest[0] = world.b;
-  dest[1] = world.c;
-  dest[2] = world.d;
-}
-
-// Moves a smoothed vector the given fraction of the way toward the latest reading.
-void lowPass(float smoothed[3], const float latest[3], float fraction) {
-  for (int i = 0; i < 3; i++) {
-    smoothed[i] += (latest[i] - smoothed[i]) * fraction;
-  }
-}
-
-// ---- Taps, falls and steps, spotted by the motion chip itself ----
-
-// Turns on the LSM6DS3TR-C's tap, double-tap, free-fall and step detectors. What they see
-// is latched until read, so checking 30 times a second misses nothing.
-void setupMotionEvents() {
-  writeImuRegister(IMU_TAP_CFG, 0x8F);      // detectors on, taps on all three axes, latched
-  writeImuRegister(IMU_TAP_THS_6D, 6);      // a tap is over 6 x (4 g / 32) = 0.75 g
-  writeImuRegister(IMU_INT_DUR2, 0x7F);     // a tap is under 58 ms, then 29 ms quiet; a second within 0.54 s is a double
-  writeImuRegister(IMU_WAKE_UP_THS, 0x80);  // report double taps as well as single ones
-  writeImuRegister(IMU_FREE_FALL, 0xFB);    // a fall is 31 samples (75 ms) all under 0.31 g
-  writeImuRegister(IMU_CTRL10_C, 0x14);     // the step counter and the functions it runs on
-  lastSteps = readSteps();                  // the chip keeps counting through a reset of ours
-  motionEventsOn = true;
-}
-
-// Counts what the detectors saw since the last check. Returns whether anything happened.
-bool readMotionEvents() {
-  if (!motionEventsOn) {
-    return false;
-  }
-  uint8_t sources[2];  // WAKE_UP_SRC then TAP_SRC; reading them clears them
-  readImuRegisters(IMU_WAKE_UP_SRC, sources, 2);
-  uint16_t steps = readSteps();
-  int seen[EVENT_COUNT];
-  seen[EVENT_TAP] = (sources[1] & IMU_SINGLE_TAP_SEEN) ? 1 : 0;
-  seen[EVENT_DOUBLE_TAP] = (sources[1] & IMU_DOUBLE_TAP_SEEN) ? 1 : 0;
-  seen[EVENT_FALL] = (sources[0] & IMU_FREE_FALL_SEEN) ? 1 : 0;
-  seen[EVENT_STEP] = (uint16_t)(steps - lastSteps);  // the chip's counter wraps at 65536
-  lastSteps = steps;
-  bool happened = false;
-  for (int i = 0; i < EVENT_COUNT; i++) {
-    readings.events[i] += seen[i];
-    happened = happened || seen[i] > 0;
-  }
-  return happened;
-}
-
-uint16_t readSteps() {
-  uint8_t data[2];
-  readImuRegisters(IMU_STEP_COUNTER, data, 2);
-  return data[0] | (data[1] << 8);
-}
-
-void writeImuRegister(uint8_t reg, uint8_t value) {
-  Wire.beginTransmission(IMU_ADDRESS);
-  Wire.write(reg);
-  Wire.write(value);
-  Wire.endTransmission();
-}
-
-// Reads len registers in a row; the chip moves to the next register by itself.
-void readImuRegisters(uint8_t reg, uint8_t *data, int len) {
-  Wire.beginTransmission(IMU_ADDRESS);
-  Wire.write(reg);
-  Wire.endTransmission(false);  // no stop: the read follows straight on
-  Wire.requestFrom(IMU_ADDRESS, len);
-  for (int i = 0; i < len; i++) {
-    data[i] = Wire.read();
-  }
-}
-
-// ---- The other sensors ----
 
 void readEnvironment() {
   readings.temperature = bmp280.readTemperature();
@@ -640,114 +331,8 @@ void readLightAndMic() {
   readings.mic = micDecibels();
 }
 
-// The RMS level of the microphone samples since the last call, in decibels.
-float micDecibels() {
-  noInterrupts();  // so the PDM callback cannot change the sums while we take them
-  int64_t sum = micSum, sumSquares = micSumSquares;
-  int32_t count = micCount;
-  micSum = micSumSquares = micCount = 0;
-  interrupts();
-  if (count == 0) {
-    return 0;
-  }
-  float mean = (float)sum / count;
-  float rms = sqrt(max((float)sumSquares / count - mean * mean, 1.0f));  // 1 keeps log10 finite in silence
-  return 20 * log10(rms / 32768) + MIC_DB_OFFSET;
-}
-
-// Called by the PDM library whenever a chunk of microphone samples is ready.
-void onMicData() {
-  int count = PDM.read(micSamples, sizeof(micSamples)) / sizeof(micSamples[0]);
-  for (int i = 0; i < count; i++) {
-    micSum += micSamples[i];
-    micSumSquares += (int32_t)micSamples[i] * micSamples[i];
-  }
-  micCount += count;
-  if (count == FFT_SIZE && !fftBlockReady) {
-    for (int i = 0; i < FFT_SIZE; i++) {
-      fftBlock[i] = micSamples[i];
-    }
-    fftBlockReady = true;
-  }
-}
-
-// ---- Sound spectrum ----
-
-// The window that fades each block in and out, so a note shows in its own band instead of
-// smearing across all of them, and where each band's bins start.
-void setupSpectrum() {
-  arm_rfft_fast_init_f32(&fft, FFT_SIZE);
-  for (int i = 0; i < FFT_SIZE; i++) {
-    hannWindow[i] = 0.5f * (1 - cosf(2 * PI * i / (FFT_SIZE - 1)));
-  }
-  float binHz = (float)MIC_RATE / FFT_SIZE;
-  float ratio = powf(SPECTRUM_HIGH_HZ / SPECTRUM_LOW_HZ, 1.0f / SPECTRUM_BANDS);  // each band this much higher
-  bandEdges[0] = lroundf(SPECTRUM_LOW_HZ / binHz);
-  for (int b = 1; b <= SPECTRUM_BANDS; b++) {
-    int edge = lroundf(SPECTRUM_LOW_HZ * powf(ratio, b) / binHz);
-    bandEdges[b] = min(max(edge, bandEdges[b - 1] + 1), FFT_SIZE / 2);  // at least one bin each
-  }
-}
-
-// Turns the latest block into the loudness of each band, keeping the loudest each reaches
-// until it is sent. Skipped while nobody is watching, since an FFT is real work.
-void updateSpectrum() {
-  static float samples[FFT_SIZE], bins[FFT_SIZE], power[FFT_SIZE / 2];
-  if (!spectrumChar.notifyEnabled()) {
-    fftBlockReady = false;
-    return;
-  }
-  for (int i = 0; i < FFT_SIZE; i++) {
-    samples[i] = fftBlock[i] * hannWindow[i];
-  }
-  fftBlockReady = false;  // the callback may fill the block again now
-  arm_rfft_fast_f32(&fft, samples, bins, 0);
-  arm_cmplx_mag_squared_f32(bins, power, FFT_SIZE / 2);
-  for (int b = 0; b < SPECTRUM_BANDS; b++) {
-    float sum = 0;
-    for (int k = bandEdges[b]; k < bandEdges[b + 1]; k++) {
-      sum += power[k];
-    }
-    // Roughly the band's RMS in sample units: the FFT and the window (which adds up to
-    // about FFT_SIZE / 2) each scale the bins up, so this undoes both.
-    float rms = sqrtf(2 * sum) / (FFT_SIZE / 2);
-    float dB = 20 * log10f(rms / 32768 + 1e-9f) + MIC_DB_OFFSET;
-    float level = constrain((dB - SPECTRUM_FLOOR_DB) * 255 / (SPECTRUM_TOP_DB - SPECTRUM_FLOOR_DB), 0, 255);
-    spectrumPeaks[b] = max(spectrumPeaks[b], (uint8_t)level);
-  }
-}
-
-// Sends the loudest each band got since the last send, about 30 times a second, so a
-// short sound between sends still shows.
-void sendSpectrum() {
-  memcpy(readings.spectrum, spectrumPeaks, sizeof(readings.spectrum));
-  memset(spectrumPeaks, 0, sizeof(spectrumPeaks));
-  publish(spectrumChar);
-}
-
 // Same as the factory demo: A beeps, B lights the white LEDs on the front. The color
 // sensor reads reflected light, so hold B to light whatever is in front of it.
-void readTouch() {
-  for (int i = 0; i < 3; i++) {
-    readings.touch[i] = touchRead(TOUCH_PINS[i]);
-  }
-}
-
-// How long, in loop ticks, the pad stays high after being charged and let go.
-int touchRead(int pin) {
-  int ticks = 0;
-  for (int sample = 0; sample < TOUCH_SAMPLES; sample++) {
-    pinMode(pin, OUTPUT);
-    digitalWrite(pin, HIGH);
-    delayMicroseconds(10);
-    pinMode(pin, INPUT);
-    while (digitalRead(pin) == HIGH && ticks < TOUCH_MAX_TICKS) {
-      ticks++;
-    }
-  }
-  return ticks;
-}
-
 void handleButtons() {
   uint8_t buttons = (digitalRead(BUTTON_A_PIN) == LOW ? 1 : 0) | (digitalRead(BUTTON_B_PIN) == LOW ? 2 : 0);
   if (buttons != readings.buttons) {
@@ -769,440 +354,24 @@ void onPixelWrite(uint16_t connHandle, BLECharacteristic *chr, uint8_t *rgb, uin
   pixel.show();
 }
 
-// ---- Calibration, kept in the board's flash ----
-
-bool calibrated() {
-  static const Calibration none = {};
-  return memcmp(&calibration, &none, sizeof(calibration)) != 0;
-}
-
-// Runs when the page writes a Calibration. All zeros means "forget it and start over".
-void onCalibrationWrite(uint16_t connHandle, BLECharacteristic *chr, uint8_t *data, uint16_t len) {
-  memcpy(&calibration, data, sizeof(calibration));
-  if (calibrated()) {
-    saveFile(CALIBRATION_FILE, &calibration, sizeof(calibration));
-    note("Calibration saved");
-  } else {
-    InternalFS.remove(CALIBRATION_FILE);
-    note("Calibration cleared");
-  }
-}
-
-// Runs when the page writes a name. An empty one goes back to the default.
-void onNameWrite(uint16_t connHandle, BLECharacteristic *chr, uint8_t *data, uint16_t len) {
-  len = min(len, (uint16_t)MAX_NAME_LEN);  // setMaxLen() already refuses longer, but be sure
-  for (int i = 0; i < len; i++) {
-    boardName[i] = isprint(data[i]) ? data[i] : '_';  // nothing that would garble the screen
-  }
-  boardName[len] = '\0';
-  saveFile(NAME_FILE, boardName, len);
-  applyName();
+// An address-only I2C transfer, the thing an I2C scanner does: a live sensor acknowledges
+// it, a dead one does not. Logs each sensor's first miss and its recovery.
+void checkSensorsAnswer() {
   char message[64];
-  snprintf(message, sizeof(message), "Renamed %s: scanners see it after this disconnects", bleName);
-  note(message);
-}
-
-// Advertises as CLUE-<name>, or CLUE- and the end of the Bluetooth address until the
-// board has a name. The scan response carries the name, so it is rebuilt too; the board
-// sends it the next time it advertises.
-void applyName() {
-  if (boardName[0] != '\0') {
-    snprintf(bleName, sizeof(bleName), "CLUE-%s", boardName);
-  } else {
-    ble_gap_addr_t addr = Bluefruit.getAddr();
-    snprintf(bleName, sizeof(bleName), "CLUE-%02X%02X", addr.addr[1], addr.addr[0]);
-  }
-  Bluefruit.setName(bleName);
-  Bluefruit.ScanResponse.clearData();
-  Bluefruit.ScanResponse.addName();
-  nameChar.write(boardName);
-}
-
-// Reads up to len bytes of a flash file into data, leaving data as it was if there is none.
-void loadFile(const char *path, void *data, int len) {
-  Adafruit_LittleFS_Namespace::File file(InternalFS);
-  if (file.open(path, Adafruit_LittleFS_Namespace::FILE_O_READ)) {
-    file.read(data, len);
-    file.close();
-  }
-}
-
-// Replaces a flash file. FILE_O_WRITE appends, so the old one goes first.
-void saveFile(const char *path, const void *data, int len) {
-  InternalFS.remove(path);
-  Adafruit_LittleFS_Namespace::File file(InternalFS);
-  if (file.open(path, Adafruit_LittleFS_Namespace::FILE_O_WRITE)) {
-    file.write((const uint8_t *)data, len);
-    file.close();
-  }
-}
-
-// ---- Setup ----
-
-void setupDisplay() {
-  display.init(240, 240);
-  display.setRotation(1);
-  display.fillScreen(ST77XX_BLACK);
-  pinMode(TFT_BACKLIGHT_PIN, OUTPUT);
-  digitalWrite(TFT_BACKLIGHT_PIN, HIGH);
-  display.setTextSize(2);
-  display.setCursor(0, 16);  // the top line is for the BLE name and state
-}
-
-// Runs in its own task twice a second. If loop() has not checked in for a second it is
-// stuck, almost certainly in an I2C transfer that will never finish. The radio is still
-// running, so over the next three ticks: say what it was doing, on the screen and over
-// BLE, and keep that in a register that survives the reset; hang up, so the page hears
-// at once instead of waiting out its link timeout; then reset the chip.
-void onStallCheck(TimerHandle_t timer) {
-  static int ticksStuck = 0;
-  if (millis() - loopAliveMs < 1000) {
-    if (ticksStuck) {
-      note("Loop running again");  // slow, then, not stuck
-    }
-    ticksStuck = 0;
-    return;
-  }
-  ticksStuck++;
-  if (ticksStuck == 1) {
-    char message[64];
-    snprintf(message, sizeof(message), "Stuck in %s", STAGE_NAMES[stage]);
-    warn(message);
-    notify(find(logChar));  // the stuck loop will not flush it, so send it from here
-    // The retention register survives the reset: the stage in the low bits, the count above.
-    sd_power_gpregret_clr(1, 0xFF);
-    sd_power_gpregret_set(1, stage | min(stallReboots + 1, 15) << 4);
-  } else if (ticksStuck == 2) {
-    Bluefruit.disconnect(Bluefruit.connHandle());
-  } else {
-    NVIC_SystemReset();
-  }
-}
-
-// After a reset, say why if it was ours. Runs before the radio starts, while the retained
-// register can still be read directly; the stall check left the stuck stage in it.
-void reportLastReset() {
-  uint8_t stuck = NRF_POWER->GPREGRET2;
-  NRF_POWER->GPREGRET2 = 0;
-  stallReboots = stuck >> 4;
-  readings.stats[3] = stallReboots;
-  if (stuck != 0) {
-    char message[64];
-    snprintf(message, sizeof(message), "Stall reboot %d: was stuck in %s", stallReboots, STAGE_NAMES[(stuck & 0xF) % STAGE_COUNT]);
-    warn(message);
-  } else if (readResetReason() & POWER_RESETREAS_DOG_Msk) {
-    warn("Rebooted by the watchdog");
-  }
-}
-
-// The backstop behind the stall check: a hardware timer that resets the chip if loop()
-// stops reporting in for five seconds, even if the stall check itself is wedged. The bus
-// is cleared on the way back up. A delay() longer than five seconds trips it.
-void startWatchdog() {
-  NRF_WDT->CONFIG = WDT_CONFIG_SLEEP_Run << WDT_CONFIG_SLEEP_Pos;  // keeps counting while asleep
-  NRF_WDT->CRV = 5 * 32768;                                        // five seconds of its 32768 Hz clock
-  NRF_WDT->RREN = WDT_RREN_RR0_Msk;
-  NRF_WDT->TASKS_START = 1;
-}
-
-// A reset in the middle of an I2C read, which every upload risks, leaves that sensor
-// holding the data line low until it is clocked out, and every later I2C transfer would
-// then wait forever. Pulse the clock by hand until the data line is released, then send
-// a stop. Wire takes the pins over afterwards.
-void unstickI2cBus() {
-  pinMode(PIN_WIRE_SDA, INPUT_PULLUP);
-  pinMode(PIN_WIRE_SCL, OUTPUT_S0D1);  // open drain, like an I2C master
-  digitalWrite(PIN_WIRE_SCL, HIGH);
-  for (int i = 0; i < 9 && digitalRead(PIN_WIRE_SDA) == LOW; i++) {
-    digitalWrite(PIN_WIRE_SCL, LOW);
-    delayMicroseconds(5);
-    digitalWrite(PIN_WIRE_SCL, HIGH);
-    delayMicroseconds(5);
-  }
-  pinMode(PIN_WIRE_SDA, OUTPUT_S0D1);
-  digitalWrite(PIN_WIRE_SDA, LOW);  // stop condition: data rises while the clock is high
-  delayMicroseconds(5);
-  digitalWrite(PIN_WIRE_SDA, HIGH);
-}
-
-// The sensors are all on the board, so only a problem gets mentioned on the screen.
-void setupSensors() {
-  // Color: 50 ms of light gathering per reading, five times the default, so an object lit
-  // by the front LEDs gives counts in the hundreds rather than single digits.
-  if (apds9960.begin(50)) {
-    apds9960.enableColor(true);
-    apds9960.enableProximity(true);
-  } else {
-    warn("APDS9960 missing");
-  }
-  if (lsm6ds33.begin_I2C()) {
-    imu = &lsm6ds33;
-  } else if (lsm6ds3trc.begin_I2C()) {
-    imu = &lsm6ds3trc;
-  }
-  if (!lis3mdl.begin_I2C()) {
-    warn("LIS3MDL missing");
-  }
-  Wire.beginTransmission(SHT30_ADDRESS);
-  Wire.write(0x21);  // periodic mode: measure once a second, high repeatability
-  Wire.write(0x30);
-  if (Wire.endTransmission() != 0) {
-    warn("SHT30 missing");
-  }
-  // Pressure: the datasheet's indoor-navigation oversampling (about 26 readings a second)
-  // with a light filter, so it is steady to a few centimeters and follows a lift in about
-  // 0.2 s. The page turns it into feet above sea level.
-  if (bmp280.begin()) {
-    bmp280.setSampling(Adafruit_BMP280::MODE_NORMAL, Adafruit_BMP280::SAMPLING_X2,
-                       Adafruit_BMP280::SAMPLING_X16, Adafruit_BMP280::FILTER_X4,
-                       Adafruit_BMP280::STANDBY_MS_1);
-  } else {
-    warn("BMP280 missing");
-  }
-  // The sensor libraries leave the bus at 100 kHz, which makes the 14-byte IMU read take
-  // most of the 2.4 ms between samples; 250 kHz makes it a quarter. Not 400 kHz: the bus
-  // also runs to edge pads 19 and 20, the small fingers between the 3V and GND rings, and
-  // a finger resting there adds enough capacitance to corrupt bits at that speed, which
-  // leaves a sensor holding the bus and the board rebooting. (The nRF52840's own 400 kHz
-  // timing is also out of spec, erratum 219.)
-  Wire.setClock(250000);
-}
-
-void setupMic() {
-  setupSpectrum();
-  PDM.onReceive(onMicData);
-  if (!PDM.begin(1, MIC_RATE)) {
-    warn("Mic failed to start");
-  }
-  PDM.setGain(MIC_GAIN);
-}
-
-// Sample at 416 Hz and raise INT1 whenever a new gyro reading is ready.
-void setupImu() {
-  if (imu == NULL) {
-    halt("No IMU found");
-  }
-  imu->setGyroDataRate(LSM6DS_RATE_416_HZ);
-  imu->setAccelDataRate(LSM6DS_RATE_416_HZ);
-  imu->configInt1(false, true, false);  // (temperature, gyro, accel) data-ready on INT1
-  if (imu == &lsm6ds3trc) {
-    setupMotionEvents();
-  }
-  pinMode(IMU_INTERRUPT_PIN, INPUT);
-  attachInterrupt(IMU_INTERRUPT_PIN, onImuDataReady, RISING);
-}
-
-void setupBle() {
-  // Max MTU 247 so the 60-byte vectors packet fits, and room to queue 8 notifications.
-  Bluefruit.configPrphConn(247, BLE_GAP_EVENT_LENGTH_DEFAULT, 8, 1);
-  Bluefruit.begin();
-
-  sensorService.begin();  // characteristics join the most recently begun service
-  for (Published &p : published) {
-    beginNotifyChar(p.chr, p.len);
-  }
-
-  pixelChar.setProperties(CHR_PROPS_READ | CHR_PROPS_WRITE | CHR_PROPS_WRITE_WO_RESP);
-  pixelChar.setFixedLen(3);
-  pixelChar.setWriteCallback(onPixelWrite);
-  pixelChar.begin();
-
-  calibrationChar.setProperties(CHR_PROPS_READ | CHR_PROPS_WRITE);
-  calibrationChar.setFixedLen(sizeof(calibration));
-  calibrationChar.setWriteCallback(onCalibrationWrite);
-  calibrationChar.begin();
-  calibrationChar.write(&calibration, sizeof(calibration));
-
-  nameChar.setProperties(CHR_PROPS_READ | CHR_PROPS_WRITE);
-  nameChar.setMaxLen(MAX_NAME_LEN);
-  nameChar.setWriteCallback(onNameWrite);
-  nameChar.begin();
-
-  // Give each CLUE its own name so a room full of them is easy to tell apart.
-  applyName();
-  showBleStatus();
-
-  // Our 128-bit UUID nearly fills the advertising packet, so the name goes in the scan
-  // response, which scanners ask for right after; applyName() put it there.
-  Bluefruit.Advertising.addFlags(BLE_GAP_ADV_FLAGS_LE_ONLY_GENERAL_DISC_MODE);
-  Bluefruit.Advertising.addService(sensorService);
-  Bluefruit.Advertising.restartOnDisconnect(true);
-  Bluefruit.Advertising.setInterval(32, 32);  // every 20 ms, always, so reconnecting is quick
-  Bluefruit.Advertising.start(0);             // 0 = keep advertising until connected
-  bleStarted = true;
-}
-
-// Asks for the 2 Mbit radio mode until the laptop or phone agrees, then reports the radio
-// settings it agreed to, once they have settled and whenever they change: the MTU
-// decides whether the bigger packets arrive whole, the interval is the ceiling on how many
-// packets a second get through, the timeout is how long the other side waits in silence
-// before it declares the link dead, and the mode is how fast each packet goes over the air.
-void noteLinkSettings() {
-  static uint16_t lastMtu = 0, lastInterval = 0, lastTimeout = 0;
-  static uint8_t lastPhy = 0;
-  static int phyRequests = 0;
-  BLEConnection *conn = Bluefruit.Connection(Bluefruit.connHandle());
-  if (!Bluefruit.connected() || conn == NULL) {
-    lastMtu = 0;
-    phyRequests = 0;
-    return;
-  }
-  // 2 Mbit sends each packet in half the air time. The laptop has the final say. A request
-  // is refused while the radio is busy, and fails if it crosses a change the laptop starts
-  // at the same moment (Windows changes the interval a second after connecting), so the
-  // board keeps asking for a few seconds.
-  if (conn->getPHY() != BLE_GAP_PHY_2MBPS && phyRequests < PHY_REQUESTS && conn->requestPHY(BLE_GAP_PHY_2MBPS)) {
-    phyRequests++;
-  }
-  if (conn->getMtu() != lastMtu || conn->getConnectionInterval() != lastInterval ||
-      conn->getSupervisionTimeout() != lastTimeout || conn->getPHY() != lastPhy) {
-    lastMtu = conn->getMtu();
-    lastInterval = conn->getConnectionInterval();
-    lastTimeout = conn->getSupervisionTimeout();
-    lastPhy = conn->getPHY();
-    char message[64];
-    snprintf(message, sizeof(message), "Link: MTU %u, interval %.2f ms, timeout %u ms, %u Mbit PHY", lastMtu,
-             lastInterval * 1.25, lastTimeout * 10, lastPhy == BLE_GAP_PHY_2MBPS ? 2 : 1);
-    note(message);
-  }
-}
-
-// A characteristic anyone can read or subscribe to, holding a fixed number of bytes.
-void beginNotifyChar(BLECharacteristic &chr, int bytes) {
-  chr.setProperties(CHR_PROPS_READ | CHR_PROPS_NOTIFY);
-  chr.setFixedLen(bytes);
-  chr.begin();
-}
-
-Published &find(BLECharacteristic &chr) {
-  for (Published &p : published) {
-    if (&p.chr == &chr) {
-      return p;
-    }
-  }
-  halt("publish() of a characteristic that is not in the published table");
-  return published[0];
-}
-
-// Stores a characteristic's current value and marks it changed. If the previous change
-// never reached subscribers, they will skip straight to this one: count that.
-void publish(BLECharacteristic &chr) {
-  Published &p = find(chr);
-  if (p.changed) {
-    readings.stats[2]++;
-  }
-  p.chr.write(p.value, p.len);
-  p.changed = true;
-}
-
-// Sends changed values to subscribers, stopping when the radio queue is full and picking
-// up where it left off on the next loop pass.
-void flushPublished() {
-  for (Published &p : published) {
-    if (!p.changed) {
-      continue;
-    }
-    if (!p.chr.notifyEnabled()) {
-      p.changed = false;  // nobody is listening; the value is still there to be read
-      continue;
-    }
-    if (notify(p) == NRF_ERROR_RESOURCES) {
-      return;
-    }
-    p.changed = false;
-  }
-}
-
-// Hands one value to the radio. Bluefruit's own notify() waits up to 100 ms when the
-// queue is full, which would stall the loop; this returns at once either way.
-uint32_t notify(Published &p) {
-  ble_gatts_hvx_params_t hvx = {};
-  uint16_t len = p.len;
-  hvx.handle = p.chr.handles().value_handle;
-  hvx.type = BLE_GATT_HVX_NOTIFICATION;
-  hvx.p_len = &len;
-  hvx.p_data = (uint8_t *)p.value;
-  return sd_ble_gatts_hvx(Bluefruit.connHandle(), &hvx);
-}
-
-// ---- Screen, laid out like the factory demo ----
-
-// Text drawn straight to the screen goes out as hundreds of tiny SPI transfers and blocks
-// the loop for tens of milliseconds a line. Each line is drawn into lineCanvas instead
-// and pushed as one block, which takes about two, and only one line is drawn per tick.
-
-// The board's name, yellow while waiting for a page or phone and green once one connects.
-// A twelve-letter name leaves no room on the line for the words.
-void showBleStatus() {
-  startLine();
-  lineCanvas.setTextColor(Bluefruit.connected() ? ST77XX_GREEN : ST77XX_YELLOW);
-  lineCanvas.print(bleName);
-  pushLine(0);
-}
-
-void showNextLine() {
-  static int line = 0;
-  startLine();
-  switch (line) {
-    case 0: showValue("Temp: ", readings.temperature, 2, " C"); break;
-    case 1: showValue("Baro: ", readings.pressure, 2, " hPa"); break;
-    case 2: showValue("Humid: ", readings.humidity, 2, " %"); break;
-    case 3: showValue("Light: ", readings.color[3], 0, ""); break;
-    case 4: showValue("Prox: ", readings.proximity, 0, ""); break;
-    case 5: showVector("Accel:", readings.vectors.accel); break;
-    case 6: showVector("Gyro:", readings.vectors.gyro); break;
-    case 7: showVector("Mag:", readings.vectors.mag); break;
-    case 8: showValue("Mic: ", readings.mic, 0, " dB"); break;
-    case 9: showPlugins(); break;
-    case 10: showTouch(); break;
-  }
-  pushLine(readingsTop + line * 16);
-  line = (line + 1) % 11;
-}
-
-void showTouch() {
-  lineCanvas.print("Touch: ");
-  for (int i = 0; i < 3; i++) {
-    lineCanvas.print(i ? " " : "");
-    lineCanvas.print((int)readings.touch[i]);
-  }
-}
-
-// The plug-in sensors answering right now, by name.
-void showPlugins() {
-  lineCanvas.print("Plug:");
-  for (Sensor &plugin : plugins) {
-    if (plugin.answering) {
-      lineCanvas.print(" ");
-      lineCanvas.print(plugin.name);
+  for (Sensor &sensor : sensors) {
+    bool answering = answers(sensor.address);
+    if (answering != sensor.answering) {
+      sensor.answering = answering;
+      snprintf(message, sizeof(message), "%s %s", sensor.name, answering ? "back" : "not answering");
+      answering ? note(message) : warn(message);
     }
   }
 }
 
-void startLine() {
-  lineCanvas.fillScreen(ST77XX_BLACK);
-  lineCanvas.setTextSize(2);
-  lineCanvas.setTextColor(ST77XX_WHITE);
-  lineCanvas.setCursor(0, 0);
-}
-
-void pushLine(int y) {
-  display.drawRGBBitmap(0, y, lineCanvas.getBuffer(), lineCanvas.width(), lineCanvas.height());
-}
-
-void showValue(const char *label, float value, int decimals, const char *unit) {
-  lineCanvas.print(label);
-  lineCanvas.print(value, decimals);
-  lineCanvas.print(unit);
-}
-
-void showVector(const char *label, const float v[3]) {
-  lineCanvas.print(label);
-  lineCanvas.print(v[0], 1);
-  lineCanvas.print(",");
-  lineCanvas.print(v[1], 1);
-  lineCanvas.print(",");
-  lineCanvas.print(v[2], 1);
+// Whether a chip at this address acknowledges its name being called on the I2C bus.
+bool answers(uint8_t address) {
+  Wire.beginTransmission(address);
+  return Wire.endTransmission() == 0;
 }
 
 // ---- Small helpers ----
@@ -1223,28 +392,21 @@ void copyVector(float dest[3], const float v[3]) {
   dest[2] = v[2];
 }
 
-// Sends a line to the serial port and to the log characteristic, which the web page prints
-// in its console: the way to see what the board is thinking once it is off the cable. A
-// line from before BLE is up goes out once it starts, so a page connecting later gets it.
-void note(const char *message) {
-  Serial.println(message);
-  strncpy(logLine, message, sizeof(logLine) - 1);
-  if (bleStarted) {
-    publish(logChar);
+// Reads up to len bytes of a flash file into data, leaving data as it was if there is none.
+void loadFile(const char *path, void *data, int len) {
+  Adafruit_LittleFS_Namespace::File file(InternalFS);
+  if (file.open(path, Adafruit_LittleFS_Namespace::FILE_O_READ)) {
+    file.read(data, len);
+    file.close();
   }
 }
 
-// Like note(), for a problem: also on the screen in red, and flagged as an error on the page.
-void warn(const char *message) {
-  display.setTextColor(ST77XX_RED);
-  display.println(message);
-  char line[64];
-  snprintf(line, sizeof(line), "ERROR: %s", message);
-  note(line);
-}
-
-void halt(const char *message) {
-  warn(message);
-  while (true) {
+// Replaces a flash file. FILE_O_WRITE appends, so the old one goes first.
+void saveFile(const char *path, const void *data, int len) {
+  InternalFS.remove(path);
+  Adafruit_LittleFS_Namespace::File file(InternalFS);
+  if (file.open(path, Adafruit_LittleFS_Namespace::FILE_O_WRITE)) {
+    file.write((const uint8_t *)data, len);
+    file.close();
   }
 }
