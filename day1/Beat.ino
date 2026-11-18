@@ -147,19 +147,27 @@ float matchLately(float period) {
   return best;
 }
 
-// Copies the onsets into spikes, newest first, each blurred into its neighbors and with
-// the average taken off. The blur is because beats are rarely a whole number of blocks
-// apart, so a hit lands a block early or late of where the last one predicts; blurred, a
-// near miss still counts. Taking the average off makes the gaps between hits negative,
-// so a tempo that puts its beats in the gaps scores badly. Returns false in silence.
+// Copies the onsets into spikes, newest first, tidied in two ways. Each is blurred into
+// its neighbors, because beats are rarely a whole number of blocks apart, so a hit lands
+// a block early or late of where the last one predicts; blurred, a near miss still counts.
+// Then the average of the second around it is taken off. That makes the gaps between hits
+// negative, so a tempo that puts its beats in the gaps scores badly. It is the average
+// nearby, not of all six seconds, so that a noise switching on or off, which lifts every
+// onset after it, does not look like a pattern that repeats. Returns false in silence.
 bool tidyOnsets() {
-  float mean = 0, power = 0;
+  static float blurred[BEAT_HISTORY];
+  const int reach = BEAT_FRAME_HZ / 2;  // half a second each way
+  float power = 0;
   for (int i = 0; i < BEAT_HISTORY; i++) {
-    mean += onsets[i] / BEAT_HISTORY;
+    blurred[i] = (onsetAgo(max(i - 1, 0)) + 2 * onsetAgo(i) + onsetAgo(min(i + 1, BEAT_HISTORY - 1))) / 4;
   }
   for (int i = 0; i < BEAT_HISTORY; i++) {
-    float blurred = (onsetAgo(max(i - 1, 0)) + 2 * onsetAgo(i) + onsetAgo(min(i + 1, BEAT_HISTORY - 1))) / 4;
-    spikes[i] = blurred - mean;
+    int from = max(i - reach, 0), to = min(i + reach, BEAT_HISTORY - 1);
+    float nearby = 0;
+    for (int j = from; j <= to; j++) {
+      nearby += blurred[j] / (to - from + 1);
+    }
+    spikes[i] = blurred[i] - nearby;
     power += spikes[i] * spikes[i] / BEAT_HISTORY;
   }
   if (power < 0.01f) {
