@@ -120,7 +120,7 @@ struct Readings {
   float humidity;       // percent
   float color[4];       // red, green, blue, clear light counts
   float proximity;      // 0 far to 255 near
-  float mic;            // approximate dB SPL
+  float mic;            // loudness, approximate dBA
   float plugins;        // which plug-in sensors answer, a bit each in the order of plugins[]
   float touch[3];       // P0, P1, P2 pad counts, higher when touched
   float events[4];      // taps, double taps, falls and steps since power-on; sent only when

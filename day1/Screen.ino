@@ -39,7 +39,7 @@ void showNextLine() {
     case 5: showVector("Accel:", readings.vectors.accel); break;
     case 6: showVector("Gyro:", readings.vectors.gyro); break;
     case 7: showVector("Mag:", readings.vectors.mag); break;
-    case 8: showValue("Mic: ", readings.mic, 0, " dB"); break;
+    case 8: showValue("Mic: ", readings.mic, 0, " dBA"); break;
     case 9: showPlugins(); break;
     case 10: showTouch(); break;
   }
