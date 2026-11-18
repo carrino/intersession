@@ -19,6 +19,7 @@ that says what it adds and why. Open the ones your project uses:
 | `Plugins` | Notices STEMMA QT boards being plugged in |
 | `Bluetooth` | How the readings get to the page |
 | `Name` | A name for each board |
+| `Storage` | Small files in the chip's flash, saved so a power cut cannot spoil them |
 | `Screen` | The readings on the board's own screen |
 | `Log` | What the board has to say: `note()` and `warn()` |
 | `Watchdog` | Gets the board going again by itself when the loop stops |

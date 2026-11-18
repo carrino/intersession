@@ -17,6 +17,7 @@
 //   Plugins.ino       notices STEMMA QT boards being plugged in
 //   Bluetooth.ino     how the readings get to the page
 //   Name.ino          a name for each board
+//   Storage.ino       small files in the chip's flash, saved so a power cut cannot spoil them
 //   Screen.ino        the readings on the board's own screen
 //   Log.ino           what the board has to say: note() and warn()
 //   Watchdog.ino      gets the board going again by itself when the loop stops
@@ -189,7 +190,7 @@ void setup() {
 
   setupDisplay();
   reportLastReset();
-  InternalFS.begin();
+  setupStorage();
   loadCalibration();
   loadName();
   unstickI2cBus();
@@ -406,23 +407,4 @@ void copyVector(float dest[3], const float v[3]) {
   dest[0] = v[0];
   dest[1] = v[1];
   dest[2] = v[2];
-}
-
-// Reads up to len bytes of a flash file into data, leaving data as it was if there is none.
-void loadFile(const char *path, void *data, int len) {
-  Adafruit_LittleFS_Namespace::File file(InternalFS);
-  if (file.open(path, Adafruit_LittleFS_Namespace::FILE_O_READ)) {
-    file.read(data, len);
-    file.close();
-  }
-}
-
-// Replaces a flash file. FILE_O_WRITE appends, so the old one goes first.
-void saveFile(const char *path, const void *data, int len) {
-  InternalFS.remove(path);
-  Adafruit_LittleFS_Namespace::File file(InternalFS);
-  if (file.open(path, Adafruit_LittleFS_Namespace::FILE_O_WRITE)) {
-    file.write((const uint8_t *)data, len);
-    file.close();
-  }
 }

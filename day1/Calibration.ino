@@ -55,8 +55,8 @@ void beginCalibrationChar() {
 void onCalibrationWrite(uint16_t connHandle, BLECharacteristic *chr, uint8_t *data, uint16_t len) {
   memcpy(&calibration, data, sizeof(calibration));
   if (calibrated()) {
-    saveFile(CALIBRATION_FILE, &calibration, sizeof(calibration));
-    note("Calibration saved");
+    bool saved = saveFile(CALIBRATION_FILE, &calibration, sizeof(calibration));
+    note(saved ? "Calibration saved" : "ERROR: Calibration not saved");
   } else {
     InternalFS.remove(CALIBRATION_FILE);
     note("Calibration cleared");
