@@ -75,8 +75,9 @@ You should now see **Adafruit CLUE** under Tools > Board > Adafruit nRF52 Boards
    fall row counts that. The motion chip spots these itself; it needs the LSM6DS3TR-C of
    the CLUE's 2025 revision, and the board's "Started with the ..." log line says which
    chip it has.
-8. Play music with a steady beat near the board. After a few seconds the NeoPixel on the
-   back flashes on the beat, a new color each time, and the page's beat row shows the tempo.
+8. Play music with a strong, steady beat near the board: dance music works best. After a
+   few seconds the NeoPixel on the back flashes on the beat, a new color each time, and the
+   page's beat row shows the tempo. Music with soft or loose drums mostly leaves it dark.
    Songs often fit half or double their tempo as well, so a fast song may flash on every
    other beat. It stops within a few seconds of the music stopping.
 9. The three ring pads P0, P1 and P2 on the bottom edge are touch pads. The screen's

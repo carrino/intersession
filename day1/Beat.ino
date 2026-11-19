@@ -18,12 +18,19 @@
 // The flashing stops a second or two after the last drum hit.
 // Music often fits half or double its tempo just as well, so the light may flash on every
 // other beat of a fast song, or twice a beat on a slow one.
+//
+// What to expect: it is at home with dance music and pop, where the drums are loud and
+// steady. On music with soft or loose drums it mostly stays dark. That is on purpose: the
+// bar to start flashing is set high, because flashing at talk and clatter is worse than
+// missing a quiet song. Doing better takes a sharper way to spot onsets and a longer look
+// back, which would make a good project.
 
 const float BEAT_FRAME_HZ = 62.5;      // blocks a second from the mic: 16000 samples in blocks of 256
 const int BEAT_HISTORY = 384;          // blocks of onsets kept: about six seconds
 const float BEAT_MIN_BPM = 60, BEAT_MAX_BPM = 180;
 const float BEAT_FAVORITE_BPM = 120;   // when half or double time fit about as well, lean toward this
-const float BEAT_MIN_MATCH = 0.3;      // how well the spikes must repeat, 0 to 1, to call it a beat
+const float BEAT_MIN_MATCH = 0.4;      // how well the spikes must repeat, 0 to 1, to call it a beat,
+const float BEAT_KEEP_MATCH = 0.3;     // and to keep a beat it already has: harder to start than to carry on
 const int BEAT_CONFIRM = 3;            // tempo checks (half a second each) that must agree before a tempo is believed
 const int BEAT_PATIENCE = 3;           // tempo checks without a match before giving up on the beat
 const int BEAT_RECENT = 188;           // blocks, three seconds: the beat has to show in these too, to count as still going,
@@ -83,7 +90,9 @@ void findBeat() {
   static int agreed = 0;       // checks in a row that found it
   float match = 0;
   float period = tidyOnsets() ? findTempo(match) : 0;
-  bool found = match >= BEAT_MIN_MATCH && matchLately(period) >= BEAT_MIN_RECENT;  // and still going, not just remembered
+  bool carryingOn = beatPeriod > 0 && sameTempo(period, beatPeriod);
+  bool found = match >= (carryingOn ? BEAT_KEEP_MATCH : BEAT_MIN_MATCH) &&
+               matchLately(period) >= BEAT_MIN_RECENT;  // and still going, not just remembered
   bool stopped = !heardLately();
   if (stopped || !found) {
     agreed = 0;
