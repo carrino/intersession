@@ -86,7 +86,7 @@ committing.
 | Project | What it does | Uses | The hard part |
 | --- | --- | --- | --- |
 | Pulse reader | A fingertip on the color sensor, lit by the white LEDs, shows a heartbeat | Color sensor, white LEDs | The pulse is a ripple of about 1% on a signal that moves when the finger does |
-| Maze mapper | Turn the board on the spot inside a cardboard maze, a closet or under a desk, and the page draws the walls | VL53L1X, day 1's orientation | Lining up each distance with the heading it was taken at. The sensor reaches about 1.3 m in a lit room (4 m only in the dark, off a white wall), so a whole room is out of reach: that would take a longer-range sensor and a motor to turn it |
+| Room mapper | Turn the board on the spot and the page draws the walls around it | VL53L1X, day 1's orientation | Lining up each distance with the heading it was taken at. Under ordinary room lights the sensor reaches about 3 m off a light wall and under 2 m off a dark one, less near a sunny window, and its beam is 27° wide: good for a small room or a hallway, blurry and short for a classroom. A narrow-beam, longer-range sensor would do a big room |
 | Vowel spotter | Tells "ee" from "oo" from "ah" by the shape of the spectrum | Microphone, the spectrum | Voices differ; it needs training on each speaker |
 | A better beat finder | Make `Beat.ino` follow rock, jazz or a song with no drums | Microphone, the beat finder | Soft onsets are hard to spot, and real players speed up and slow down |
 

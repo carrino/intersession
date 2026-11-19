@@ -69,7 +69,7 @@ Prices are from the order. The AMG8833 thermal camera was out of stock, so it is
 
 | Part | What it does | A project | Qty | Price |
 | --- | --- | --- | --- | --- |
-| VL53L1X | Distance by timing light: about 1.3 m in a lit room, up to 4 m in the dark | Theremin, parking sensor | 1 | $14.95 |
+| VL53L1X | Distance by timing light: about 3 m indoors off a light wall, less in sunlight | Theremin, parking sensor | 1 | $14.95 |
 | MPR121 | 12 capacitive touch inputs, alligator-clip pads | Fruit piano, touch keyboard | 3 | $6.95 |
 | ANO encoder | Dial with five buttons | Menus, a game controller | 2 | $13.95 |
 | PA1010D | GPS | Track a walk; needs a window or outdoors | 1 | $29.95 |
