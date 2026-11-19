@@ -22,7 +22,7 @@ that already does the hard part, named where they do.
 | Sound meter | Room loudness lights the NeoPixel green, yellow or red | Microphone | Clap detector; a tuner with frequency analysis |
 | Touch piano | Three pads, three notes | Touch pads, speaker | Alligator clips to fruit or foil |
 | Gesture clicker | Swipe over the board to change slides on a laptop, as a Bluetooth keyboard | Gesture sensor, Bluetooth | Tilt to point |
-| Tilt game controller | Tilt the CLUE to steer a ball through a maze on a web page | Day 1's orientation, a browser game | Two players |
+| Marble maze | Tilt the CLUE to roll a marble through a maze on a web page, like the wooden box with two knobs | Day 1's orientation, a browser game | Holes to fall in, a timer and levels; the whole game on the CLUE's own screen, no laptop; a buzz from the haptic motor on each wall hit |
 | Reaction game | Buttons and screen: who presses first | Buttons, screen, speaker | Leaderboard on the page |
 | Step counter | The motion chip counts steps itself; write your own detector and compare | Accelerometer | Steps per minute, distance |
 | Tap commands | Tap, double tap and drop do different things | The motion chip's tap and fall detectors | A secret knock |
