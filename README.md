@@ -56,9 +56,11 @@ You should now see **Adafruit CLUE** under Tools > Board > Adafruit nRF52 Boards
    those browsers have Web Bluetooth. Click Connect and pick your board's name.
 5. A board that has never been calibrated shows a calibration screen on the page. First
    type a name in its box and press Enter: the board then shows up as `CLUE-<name>`, so
-   everyone can find their own. The laptop that did the naming may go on listing the old
-   name for a while, because a laptop remembers each board's name from the last time it
-   connected; the top line of the board's own screen is the name it is really using. Then hold the board in the air, away from the table, with
+   everyone can find their own. The page drops the link and reconnects when you do: a
+   laptop lists each board under the name it learned the last time it connected, so that
+   is how yours learns the new one. Another laptop that knew the board by its old name
+   lists it that way until it connects again; the top line of the board's own screen is
+   the name it is really using. Then hold the board in the air, away from the table, with
    each of its six faces toward the floor in turn: a face goes yellow when it is within 10
    degrees, fills green while you hold still, and locks in after a second and a half. Then
    set the board down on anything and leave it alone. Click a card to redo that step. The

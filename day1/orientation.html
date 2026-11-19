@@ -659,6 +659,8 @@
 
     // Saves the name box on the board, which then advertises as CLUE-<name>. Runs when the
     // box loses focus or Enter is pressed. Empty goes back to the board's default name.
+    // Then hangs up, which the page answers by reconnecting: a laptop lists a board under
+    // the name it learned when it last connected, so this is how it learns the new one.
     async function sendName(name) {
       const nameStatus = document.getElementById('nameStatus');
       if (!nameInput.checkValidity()) {
@@ -666,9 +668,9 @@
         return;
       }
       await name.writeValue(new TextEncoder().encode(nameInput.value));
-      nameStatus.textContent = "saved. This laptop's Bluetooth list may show the old name for a while.";
-      showConnected();
-      log('named', nameInput.value);
+      nameStatus.textContent = 'saved';
+      log('named', nameInput.value, 'and reconnecting so this laptop learns the name');
+      device.gatt.disconnect();
     }
 
     // Writes the color picker's value to the board as three bytes. The picker fires faster

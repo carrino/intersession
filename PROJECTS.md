@@ -26,7 +26,7 @@ that already does the hard part, named where they do.
 | Reaction game | Buttons and screen: who presses first | Buttons, screen, speaker | Leaderboard on the page |
 | Step counter | The motion chip counts steps itself; write your own detector and compare | Accelerometer | Steps per minute, distance |
 | Tap commands | Tap, double tap and drop do different things | The motion chip's tap and fall detectors | A secret knock |
-| Tuner | Names the note you sing or play and shows sharp or flat | Microphone, the spectrum in `Sound.ino` | Whistle high or low to steer a game on the page |
+| Guitar tuner | Names the string you pluck and shows sharp or flat | Microphone: the raw samples from `Sound.ino`, not its spectrum, whose 62.5 Hz steps are far too coarse. Find how long the wave takes to repeat | Any note, sung or whistled; whistle high or low to steer a game on the page |
 | Clap-along coach | Shows the tempo of music or of your clapping, and whether you are rushing | Microphone, the beat finder in `Beat.ino` | A metronome you set by tapping the board |
 | Air drums | Swing the board like a stick and the laptop plays the drum | Gyro, a web page that makes the sound | Different drums for different directions |
 | Posture coach | Clipped to a shirt, it beeps after ten seconds of slouching | Day 1's orientation, speaker | A day's score on the page |
