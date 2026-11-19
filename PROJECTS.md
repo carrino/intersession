@@ -67,6 +67,24 @@ that already does the hard part, named where they do.
 | Satellite clock | The time, to the second, from GPS satellites | PA1010D | Speed and heading for a bike |
 | Treasure hunt | An arrow points toward a hidden spot outdoors and says how far | PA1010D, NeoPixel ring or the screen | Hide one for another team |
 
+## With the rover
+
+A two-wheeled chassis with the CLUE riding on top. It needs the chassis kit, the motor
+bonnet and a 4×AA holder, which are on the list to order but not bought yet. The rover
+has no wheel sensors, so it cannot tell how far it has gone; the CLUE's gyro tells it
+which way it is facing, and that is what all of these lean on. The motors have magnets in
+them, so the compass will not be trusted here: heading comes from the gyro alone.
+
+| Project | What it does | Uses | Stretch goal |
+| --- | --- | --- | --- |
+| Drive a square | Straight lines and exact quarter turns, ending where it started | The gyro's heading, the motors | A triangle, a star, your initials |
+| Obstacle avoider | Drives until something is close, turns away, carries on | Distance sensor facing forward | Pick the clearer side by looking both ways first |
+| Maze solver | Finds its way out of a cardboard maze by keeping one hand on the wall | Distance sensor, the gyro's heading | Draw the maze on the page as it explores; remember the way and run it again faster |
+| Line follower | Follows a dark line on the floor | The color sensor facing down, lit by the white LEDs | A fork in the line; a faster lap |
+| Remote control | Tilt a second board, or a phone, to steer | Bluetooth, day 1's orientation | Drive it out of sight using only what its sensors report |
+| Light seeker | Turns toward the brightest spot and drives to it | Light sensor | Hide from the light instead |
+| Dancing robot | Moves on the beat of the music | The beat finder in `Beat.ino` | A different move for each bar |
+
 ## Two boards together
 
 | Project | What it does | Uses | Stretch goal |
