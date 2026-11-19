@@ -28,7 +28,7 @@ that already does the hard part, named where they do.
 | Tap commands | Tap, double tap and drop do different things | The motion chip's tap and fall detectors | A secret knock |
 | Guitar tuner | Names the string you pluck and shows sharp or flat | Microphone: the raw samples from `Sound.ino`, not its spectrum, whose 62.5 Hz steps are far too coarse. Find how long the wave takes to repeat | Any note, sung or whistled; whistle high or low to steer a game on the page |
 | Clap-along coach | Shows the tempo of music or of your clapping, and whether you are rushing | Microphone, the beat finder in `Beat.ino` | A metronome you set by tapping the board |
-| Air drums | Swing the board like a stick and the laptop plays the drum | Gyro, a web page that makes the sound | Different drums for different directions |
+| Air drums | Strap the board to a stick, swing it, and the laptop plays the drum. Start by tapping a pillow, which the tap counter already hears | Gyro, a web page that makes the sound | Different drums for different directions; the stick and a drum kit drawn in 3D on the page, like day 1's board; a second stick |
 | Posture coach | Clipped to a shirt, it beeps after ten seconds of slouching | Day 1's orientation, speaker | A day's score on the page |
 | Elevator profiler | Rides an elevator and plots its speed and height | Pressure sensor, accelerometer | Compare the two sensors' answers; find the fastest elevator |
 | Door counter | Counts people passing the board | Proximity sensor | Tell in from out with the gesture sensor |
