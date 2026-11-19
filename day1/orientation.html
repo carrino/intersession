@@ -280,8 +280,14 @@
       const calibrated = Array.from({ length: 9 }, (_, i) => stored.getFloat32(4 * i, true)).some(v => v !== 0);
       log('calibrated:', calibrated);
       showCalibrationScreen(!calibrated);
-      status.textContent = `Connected to ${device.name}`;
+      showConnected();
       log('ready');
+    }
+
+    // Shows the board's name as the board itself reports it. device.name is what this
+    // laptop remembers from the last time it connected, so it lags behind a rename.
+    function showConnected() {
+      status.textContent = `Connected to ${nameInput.value ? 'CLUE-' + nameInput.value : device.name}`;
     }
 
     // Splits a characteristic's bytes into its fields and keeps the latest values. A packet
@@ -642,7 +648,8 @@
         return;
       }
       await name.writeValue(new TextEncoder().encode(nameInput.value));
-      nameStatus.textContent = 'saved';
+      nameStatus.textContent = "saved. This laptop's Bluetooth list may show the old name for a while.";
+      showConnected();
       log('named', nameInput.value);
     }
 
