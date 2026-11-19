@@ -27,6 +27,7 @@
 <body>
   <div id="ui">
     <button id="connect">Connect to CLUE</button>
+    <button id="disconnect" disabled>Disconnect</button>
     <span id="status">Not connected</span>
     <label>Back LED <input type="color" id="pixel" value="#000000" disabled></label>
     <button id="recalibrate" hidden>Recalibrate</button>
@@ -186,6 +187,7 @@
     const status = document.getElementById('status');
     const table = document.getElementById('data');
     const pixelInput = document.getElementById('pixel');
+    const disconnectButton = document.getElementById('disconnect');
     const nameInput = document.getElementById('boardName');
 
     // Everything that happens on the Bluetooth side is logged to the browser console
@@ -202,7 +204,20 @@
       device = await navigator.bluetooth.requestDevice({ filters: [{ services: [SERVICE_UUID] }] });
       log('chose', device.name, device.id);
       device.addEventListener('gattserverdisconnected', reconnect);
+      disconnectButton.disabled = false;
       await subscribe();
+    }
+
+    // The Disconnect button: hang up and stay hung up, so the board is free for another
+    // laptop. Forgetting the device first is what tells reconnect() this was on purpose.
+    function disconnect() {
+      const leaving = device;
+      device = null;
+      leaving.gatt.disconnect();
+      disconnectButton.disabled = true;
+      pixelInput.disabled = true;
+      status.textContent = 'Disconnected';
+      log('disconnected by the button');
     }
 
     // A board that reset drops the link and is advertising again a few seconds later. Web
@@ -213,8 +228,8 @@
     const RECONNECT_TIMEOUT_MS = 10000;
     let reconnecting = false;
     async function reconnect() {
-      if (reconnecting) {
-        return;  // a try that connected and then dropped fires this again; the loop carries on
+      if (reconnecting || !device) {
+        return;  // a try that connected and then dropped fires this again; or the button hung up
       }
       reconnecting = true;
       const lost = device;
@@ -223,6 +238,9 @@
       for (let tries = 1; tries <= 600 && device === lost; tries++) {
         status.textContent = `Disconnected, reconnecting (try ${tries})`;
         await new Promise(resolve => setTimeout(resolve, 1000));
+        if (device !== lost) {
+          break;  // the Disconnect button, or another board was chosen, while we waited
+        }
         try {
           await withTimeout(subscribe(), RECONNECT_TIMEOUT_MS);
           reconnecting = false;
@@ -677,6 +695,7 @@
         console.error(err);
         status.textContent = err.message;
       });
+      disconnectButton.onclick = disconnect;
     } else {
       status.textContent = 'Web Bluetooth needs Chrome or Edge';
     }
