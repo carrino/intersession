@@ -1,11 +1,11 @@
 # Project ideas: brainstorm
 
-Seeds for Friday's conversation and the week. A good week-long project has a small core
-that works by the middle of the week, a demo anyone can try at the end, and stretch goals
-for the time in between. Most of these work with only what is on the CLUE; the rest need
-one part from the list in [`FRIDAY.md`](FRIDAY.md), where each part links to its page.
-Some build on a tab of day 1's sketch that already does the hard part, named where they
-do.
+Ideas to choose from for the week. A good week-long project has a small core that works by
+the middle of the week, a demo anyone can try at the end, and stretch goals for the time
+in between. Most of these work with only what is on the [CLUE][clue]; the rest need one
+more part. Each part's name links to its page, with pictures and what it can do, and the
+whole list with quantities is in [`FRIDAY.md`](FRIDAY.md). Some projects build on a tab of
+day 1's sketch that already does the hard part, named where they do.
 
 ## With just the CLUE
 
@@ -41,47 +41,47 @@ do.
 
 | Project | What it does | Part | Stretch goal |
 | --- | --- | --- | --- |
-| Theremin | Hand distance sets the pitch | VL53L1X | Second hand controls volume through tilt |
-| Parking sensor | Beeps faster as something gets closer | VL53L1X | Distance on the screen |
-| Fruit piano | Twelve keys made of bananas, foil or pencil drawings | MPR121 | Record and play back |
-| Buzzing compass | Buzzes when facing north; wear it | DRV2605L and motor | Buzz toward a saved spot |
-| Silent pager | A phone writes a characteristic and the board buzzes | DRV2605L and motor | Patterns that mean different things |
-| Air monitor | CO2 level as green, yellow or red: "open a window" | SCD-43 | A week's log of the classroom |
-| Walk tracker | Logs a walk to flash and draws it on a map | PA1010D | Speed and distance |
-| Sunburn meter | UV index and how long until a burn | LTR390 | Outdoor log |
-| Thermometer gun | Point and read a surface temperature | MLX90632 | Find the coldest window |
-| Menu and drawing toy | A dial-driven menu, or an etch-a-sketch on the screen | ANO encoder | A small game |
-| Compass ring | The LED pointing north stays lit as the board turns | NeoPixel ring, day 1's orientation | Point to a saved spot |
-| Level ring | The ring lights downhill, brighter the steeper the tilt | NeoPixel ring | A two-axis level on the 12 and 16 rings |
-| Desk lamp | True white you dim with the touch pads | NeoPixel stick (RGBW) | Warm to cool by mixing in color |
-| Light strip | A meter of NeoPixels that reacts to sound or motion | NeoDriver, a strip, the 5 V supply | Music visualizer from the microphone |
-| Scrolling sign | Text or a live sensor graph on a 13×9 color matrix | IS31FL3741 | Snake, steered with the ANO dial |
-| Spectrum display | The page's dot grid on real LEDs: the board already makes 13 bands and the matrix is 13 wide | IS31FL3741 | Flash the whole matrix on the beat |
-| Beat you can feel | The motor taps out the beat of music playing in the room | DRV2605L and motor, the beat finder | A wristband on a battery |
-| Catch the light | One LED races round the ring; press the button when it reaches the top | NeoPixel ring | Gets faster each round; two players |
-| Timer ring | The ring empties as time runs down, then flashes | NeoPixel ring | Set the time with a tilt or the touch pads |
-| Speed trap | Clocks a toy car or a rolling ball from how fast the distance changes | VL53L1X | Chart the run and find the acceleration |
-| Water level | Foil strips on the outside of a cup sense the water through it | MPR121 | Fill-me reminder for a plant |
-| Plant in a jar | Watch a plant take in CO2 in the light and give it back in the dark | SCD-43 | Compare two plants; the same with a person breathing |
-| Sunscreen tester | How much UV gets through sunglasses, a window, or sunscreen on cling film | LTR390 | Rank brands; SPF from the numbers |
-| Cooling curve | Logs a hot drink cooling without touching it and predicts when it is drinkable | MLX90632 | Does a lid, a spoon or blowing help most? |
-| Satellite clock | The time, to the second, from GPS satellites | PA1010D | Speed and heading for a bike |
-| Treasure hunt | An arrow points toward a hidden spot outdoors and says how far | PA1010D, NeoPixel ring or the screen | Hide one for another team |
+| Theremin | Hand distance sets the pitch | [VL53L4CX][vl53l4cx] | Second hand controls volume through tilt |
+| Parking sensor | Beeps faster as something gets closer | [VL53L4CX][vl53l4cx] | Distance on the screen |
+| Fruit piano | Twelve keys made of bananas, foil or pencil drawings | [MPR121][mpr121] | Record and play back |
+| Buzzing compass | Buzzes when facing north; wear it | [DRV2605L][drv2605l] and [motor][motor-disc] | Buzz toward a saved spot |
+| Silent pager | A phone writes a characteristic and the board buzzes | [DRV2605L][drv2605l] and [motor][motor-disc] | Patterns that mean different things |
+| Air monitor | CO2 level as green, yellow or red: "open a window" | [SCD-43][scd43] | A week's log of the classroom |
+| Walk tracker | Logs a walk to flash and draws it on a map | [PA1010D][gps] | Speed and distance |
+| Sunburn meter | UV index and how long until a burn | [LTR390][ltr390] | Outdoor log |
+| Thermometer gun | Point and read a surface temperature | [MLX90632][mlx90632] | Find the coldest window |
+| Menu and drawing toy | A dial-driven menu, or an etch-a-sketch on the screen | [ANO encoder][ano] | A small game |
+| Compass ring | The LED pointing north stays lit as the board turns | [NeoPixel ring][ring], day 1's orientation | Point to a saved spot |
+| Level ring | The ring lights downhill, brighter the steeper the tilt | [NeoPixel ring][ring] | A two-axis level on the 12 and 16 rings |
+| Desk lamp | True white you dim with the touch pads | [NeoPixel stick (RGBW)][stick] | Warm to cool by mixing in color |
+| Light strip | A meter of NeoPixels that reacts to sound or motion | [NeoDriver][neodriver], a strip, the [5 V supply][supply] | Music visualizer from the microphone |
+| Scrolling sign | Text or a live sensor graph on a 13×9 color matrix | [IS31FL3741][matrix] | Snake, steered with the ANO dial |
+| Spectrum display | The page's dot grid on real LEDs: the board already makes 13 bands and the matrix is 13 wide | [IS31FL3741][matrix] | Flash the whole matrix on the beat |
+| Beat you can feel | The motor taps out the beat of music playing in the room | [DRV2605L][drv2605l] and [motor][motor-disc], the beat finder | A wristband on a battery |
+| Catch the light | One LED races round the ring; press the button when it reaches the top | [NeoPixel ring][ring] | Gets faster each round; two players |
+| Timer ring | The ring empties as time runs down, then flashes | [NeoPixel ring][ring] | Set the time with a tilt or the touch pads |
+| Speed trap | Clocks a toy car or a rolling ball from how fast the distance changes | [VL53L4CX][vl53l4cx] | Chart the run and find the acceleration |
+| Water level | Foil strips on the outside of a cup sense the water through it | [MPR121][mpr121] | Fill-me reminder for a plant |
+| Plant in a jar | Watch a plant take in CO2 in the light and give it back in the dark | [SCD-43][scd43] | Compare two plants; the same with a person breathing |
+| Sunscreen tester | How much UV gets through sunglasses, a window, or sunscreen on cling film | [LTR390][ltr390] | Rank brands; SPF from the numbers |
+| Cooling curve | Logs a hot drink cooling without touching it and predicts when it is drinkable | [MLX90632][mlx90632] | Does a lid, a spoon or blowing help most? |
+| Satellite clock | The time, to the second, from GPS satellites | [PA1010D][gps] | Speed and heading for a bike |
+| Treasure hunt | An arrow points toward a hidden spot outdoors and says how far | [PA1010D][gps], [NeoPixel ring][ring] or the screen | Hide one for another team |
 
 ## With the rover
 
-A two-wheeled chassis with the CLUE riding on top. It needs the
-[chassis kit](https://www.adafruit.com/product/2939), the [motor bonnet](https://www.adafruit.com/product/4280) and a [4×AA holder](https://www.adafruit.com/product/830), which are
-on the list to order but not bought yet. The rover
-has no wheel sensors, so it cannot tell how far it has gone; the CLUE's gyro tells it
-which way it is facing, and that is what all of these lean on. The motors have magnets in
-them, so the compass will not be trusted here: heading comes from the gyro alone.
+A two-wheeled chassis with the CLUE riding on top. It needs the [chassis kit][chassis],
+the [motor bonnet][bonnet] to drive its two motors, and a [4×AA holder][aa-holder] to
+power them. There is one rover. It has no wheel sensors, so it cannot tell how far it has
+gone; the CLUE's gyro tells it which way it is facing, and that is what all of these lean
+on. The motors have magnets in them, so the compass will not be trusted here: heading
+comes from the gyro alone.
 
 | Project | What it does | Uses | Stretch goal |
 | --- | --- | --- | --- |
 | Drive a square | Straight lines and exact quarter turns, ending where it started | The gyro's heading, the motors | A triangle, a star, your initials |
-| Obstacle avoider | Drives until something is close, turns away, carries on | Distance sensor facing forward | Pick the clearer side by looking both ways first |
-| Maze solver | Finds its way out of a cardboard maze by keeping one hand on the wall | Distance sensor, the gyro's heading | Draw the maze on the page as it explores; remember the way and run it again faster |
+| Obstacle avoider | Drives until something is close, turns away, carries on | [Distance sensor][vl53l4cx] facing forward | Pick the clearer side by looking both ways first |
+| Maze solver | Finds its way out of a cardboard maze by keeping one hand on the wall | [Distance sensor][vl53l4cx], the gyro's heading | Draw the maze on the page as it explores; remember the way and run it again faster |
 | Line follower | Follows a dark line on the floor | The color sensor facing down, lit by the white LEDs | A fork in the line; a faster lap |
 | Remote control | Tilt a second board, or a phone, to steer | Bluetooth, day 1's orientation | Drive it out of sight using only what its sensors report |
 | Light seeker | Turns toward the brightest spot and drives to it | Light sensor | Hide from the light instead |
@@ -89,21 +89,20 @@ them, so the compass will not be trusted here: heading comes from the gyro alone
 
 ## With the thermal camera
 
-An [AMG8833](https://www.adafruit.com/product/3538): an 8×8 picture of temperature, ten times a second, from 0 to 80 °C. It was
-out of stock for the first order and is coming from Digi-Key. Eight by eight is coarse: a
-person across the room is a few warm squares. It reads to a quarter of a degree, but
-only within about 2.5 °C of the true temperature, so it shows what is warmer than what,
-not a fever.
+An [AMG8833][amg8833]: an 8×8 picture of temperature, ten times a second, from 0 to
+80 °C. Eight by eight is coarse: a person across the room is a few warm squares. It reads
+to a quarter of a degree, but only within about 2.5 °C of the true temperature, so it
+shows what is warmer than what, not a fever.
 
 | Project | What it does | Uses | Stretch goal |
 | --- | --- | --- | --- |
-| Thermal camera | A live heat picture on the page, smoothed up from the 64 squares | AMG8833, Bluetooth | The picture on the CLUE's own screen, to carry around; a freeze button |
-| Heat detective | Find the handprint left on a table, the chair someone just left, the draughty window, the charger that is working hardest | AMG8833 | Time how long a handprint lasts on wood, metal and plastic |
-| Hand tracker | Finds the warm spot that is your hand and uses where it is as a controller | AMG8833 | Steer the marble maze or play the theremin with no board in your hand |
-| People counter | Counts people through a doorway and which way they went, with a camera that cannot recognize anyone | AMG8833 | Keep a running count of who is in the room |
-| Heat on LEDs | The picture on the 13×9 color matrix | AMG8833, IS31FL3741 | Blue to red through the whole rainbow |
-| Follow me | The rover turns toward the warmest thing it sees and drives after it | AMG8833, the rover | Keep a set distance; lose interest in radiators |
-| Heat panorama | Sweep the board round and stitch the frames into one wide picture, placed by which way it was facing | AMG8833, day 1's orientation | The whole room, floor to ceiling |
+| Thermal camera | A live heat picture on the page, smoothed up from the 64 squares | [AMG8833][amg8833], Bluetooth | The picture on the CLUE's own screen, to carry around; a freeze button |
+| Heat detective | Find the handprint left on a table, the chair someone just left, the draughty window, the charger that is working hardest | [AMG8833][amg8833] | Time how long a handprint lasts on wood, metal and plastic |
+| Hand tracker | Finds the warm spot that is your hand and uses where it is as a controller | [AMG8833][amg8833] | Steer the marble maze or play the theremin with no board in your hand |
+| People counter | Counts people through a doorway and which way they went, with a camera that cannot recognize anyone | [AMG8833][amg8833] | Keep a running count of who is in the room |
+| Heat on LEDs | The picture on the 13×9 color matrix | [AMG8833][amg8833], [IS31FL3741][matrix] | Blue to red through the whole rainbow |
+| Follow me | The rover turns toward the warmest thing it sees and drives after it | [AMG8833][amg8833], [the rover](#with-the-rover) | Keep a set distance; lose interest in radiators |
+| Heat panorama | Sweep the board round and stitch the frames into one wide picture, placed by which way it was facing | [AMG8833][amg8833], day 1's orientation | The whole room, floor to ceiling |
 
 ## Two boards together
 
@@ -124,7 +123,7 @@ committing.
 | Project | What it does | Uses | The hard part |
 | --- | --- | --- | --- |
 | Pulse reader | A fingertip on the color sensor, lit by the white LEDs, shows a heartbeat | Color sensor, white LEDs | The pulse is a ripple of about 1% on a signal that moves when the finger does |
-| Room mapper | Turn the board on the spot and the page draws the walls around it | VL53L1X, day 1's orientation | Lining up each distance with the heading it was taken at. Under ordinary room lights the sensor reaches about 3 m off a light wall and under 2 m off a dark one, less near a sunny window, and its beam is 27° wide: good for a small room or a hallway, blurry and short for a classroom. A narrow-beam, longer-range sensor would do a big room |
+| Room mapper | Turn the board on the spot and the page draws the walls around it | [VL53L4CX][vl53l4cx], day 1's orientation | Lining up each distance with the heading it was taken at. Indoors the sensor reaches about 4 m off a light wall and 2 m off a dark one, less in daylight, and its beam is 18° wide: enough to reach a classroom's walls, with the corners coming out soft |
 | Vowel spotter | Tells "ee" from "oo" from "ah" by the shape of the spectrum | Microphone, the spectrum | Voices differ; it needs training on each speaker |
 | A better beat finder | Make `Beat.ino` follow rock, jazz or a song with no drums | Microphone, the beat finder | Soft onsets are hard to spot, and real players speed up and slow down |
 
@@ -134,3 +133,23 @@ committing.
 - What can you show working by Wednesday?
 - Who is it for, and what would they do with it?
 - What would you add with a spare day?
+
+[clue]: https://www.adafruit.com/product/4500
+[vl53l4cx]: https://www.adafruit.com/product/5425
+[mpr121]: https://www.adafruit.com/product/4830
+[drv2605l]: https://www.adafruit.com/product/2305
+[motor-disc]: https://www.adafruit.com/product/1201
+[scd43]: https://www.adafruit.com/product/6512
+[gps]: https://www.adafruit.com/product/4415
+[ltr390]: https://www.adafruit.com/product/4831
+[mlx90632]: https://www.adafruit.com/product/6403
+[ano]: https://www.adafruit.com/product/6310
+[ring]: https://www.adafruit.com/product/1463
+[stick]: https://www.adafruit.com/product/2868
+[neodriver]: https://www.adafruit.com/product/5766
+[supply]: https://www.adafruit.com/product/276
+[matrix]: https://www.adafruit.com/product/5201
+[amg8833]: https://www.adafruit.com/product/3538
+[chassis]: https://www.adafruit.com/product/2939
+[bonnet]: https://www.adafruit.com/product/4280
+[aa-holder]: https://www.adafruit.com/product/830
