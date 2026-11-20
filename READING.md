@@ -1,13 +1,14 @@
 # Before January: reading and setup
 
-In January we spend a week on the Adafruit CLUE: a small board with a screen, Bluetooth,
+In January, the first week back after the holiday break, we spend a week on the Adafruit
+CLUE: a small board with a screen, Bluetooth,
 and a dozen sensors. You will learn how the electronics work and build a project of your
 own. This list gets you ready. Everything on it is free except the books, and the books
 are optional.
 
 An hour or two a week between now and January is plenty. Do the setup first.
 
-## 1. Set up your laptop (before winter break)
+## 1. Set up your laptop (before class starts)
 
 You need a Windows or Mac laptop you are allowed to install software on. A Chromebook or
 an iPad will not work.
