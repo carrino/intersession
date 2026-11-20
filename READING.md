@@ -19,11 +19,6 @@ an iPad will not work.
 2. Its last step is to open `day1/day1.ino` from your clone and press **Verify** (the check
    mark). If it compiles with no errors, your laptop is ready. You do not need a board for
    this.
-3. Make your first commit, so you know the whole round trip works. In your clone, add a
-   file `students/<your GitHub name>.md` with a line or two about a project you might
-   like to build; [`PROJECTS.md`](PROJECTS.md) has ideas. In GitHub Desktop, write a
-   summary such as "Add my project idea", click **Commit**, then **Push**. Look at your
-   fork on github.com: the file should be there.
 
 If anything goes wrong, send the error message; it is much easier to fix now than in
 class.

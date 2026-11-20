@@ -62,8 +62,7 @@ and most of the time building something of their own.
   public, so a link works.
 - The install homework, due before winter break: **Set up your laptop** in the README,
   which ends with forking and cloning the repository and pressing Verify on
-  `day1/day1.ino`. If it compiles, the laptop is ready; no board needed. Then a first
-  commit pushed to their fork, as the reading list describes.
+  `day1/day1.ino`. If it compiles, the laptop is ready; no board needed.
 
 ## The parts list
 
