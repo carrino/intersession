@@ -1,33 +1,23 @@
 # Intersession electronics class
 
 Code for the Adafruit CLUE board. Each day lives in its own folder with a sketch named
-after the folder, for example `day1/day1.ino`. Open that file in the Arduino IDE and the
-other files in the folder come along with it, as tabs across the top.
+after the folder, for example `day1/day1.ino`, and a web page that shows what the board is
+doing.
 
-`day1.ino` is the whole picture: the pins, the list of readings, `setup()` and `loop()`.
-Anything that takes more than one library call has its own tab, starting with a header
-that says what it adds and why. Open the ones your project uses:
-
-| Tab | What it is |
-|---|---|
-| `Orientation` | Which way the board is facing, from the gyro, accelerometer and compass |
-| `Calibration` | This board's sensor offsets, kept in its flash |
-| `MotionEvents` | Taps, double taps, falls and steps, spotted by the motion chip itself |
-| `Sound` | The microphone's loudness and its spectrum |
-| `Beat` | Finds the beat in music and flashes the back NeoPixel on it |
-| `Touch` | The P0, P1 and P2 ring pads as touch pads |
-| `Plugins` | Notices STEMMA QT boards being plugged in |
-| `Bluetooth` | How the readings get to the page |
-| `Name` | A name for each board |
-| `Storage` | Small files in the chip's flash, saved so a power cut cannot spoil them |
-| `Screen` | The readings on the board's own screen |
-| `Log` | What the board has to say: `note()` and `warn()` |
-| `Watchdog` | Gets the board going again by itself when the loop stops |
+- [Set up your laptop](#set-up-your-laptop): once
+- [Set up a board](#set-up-a-board): once per board
+- [Every day](#every-day): upload, connect, save your work
+- [When something goes wrong](#when-something-goes-wrong)
+- [What is in day 1](#what-is-in-day-1)
 
 The [`datasheets`](datasheets/README.md) folder has the CLUE's schematic and pinout and the
 datasheet for every sensor on it or in the parts order.
 
-## One-time setup
+## Set up your laptop
+
+Once. A Windows or Mac laptop you are allowed to install software on.
+
+**Install the tools**
 
 1. Install [Arduino IDE 2](https://www.arduino.cc/en/software).
 2. Open **File > Preferences** (Arduino IDE > Settings on a Mac). In *Additional boards
@@ -40,53 +30,73 @@ datasheet for every sensor on it or in the parts order.
    in every library the CLUE sketches use. It downloads about fifty libraries, so give it a
    few minutes; if the IDE is still showing "Processing" after the last one, quit and reopen
    it. Everything is already installed at that point.
+5. Make sure you have Chrome or Edge. The web pages use Web Bluetooth, which only those
+   browsers have.
 
-You should now see **Adafruit CLUE** under Tools > Board > Adafruit nRF52 Boards.
+**Get the code**
+
+Your own copy, kept under version control, so every change you make is saved with a note
+and can be undone.
+
+6. Make a free account at [github.com](https://github.com) if you do not have one.
+7. Open [github.com/carrino/intersession](https://github.com/carrino/intersession) and
+   click **Fork**, top right. That makes a copy of the repository under your own account.
+8. Install [GitHub Desktop](https://desktop.github.com) and sign in. Choose **File > Clone
+   repository**, pick your fork, and note the folder it goes in. If it asks how you plan
+   to use the fork, choose **For my own purposes**. From a terminal the same thing is
+   `git clone https://github.com/<your-name>/intersession.git`.
+
+**Check it**
+
+9. In the Arduino IDE, open `day1/day1.ino` from the folder you cloned and press **Verify**
+   (the check mark). Tools > Board should say **Adafruit CLUE**. If it compiles with no
+   errors, the laptop is ready. No board is needed for this.
+
+**Getting the class's updates.** The class repository will change after you fork it. On
+your fork's page on GitHub, click **Sync fork**, then **Update branch**. Then in GitHub
+Desktop click **Fetch origin** and **Pull origin**. Your own commits are kept.
+
+## Set up a board
+
+Once per board. The board keeps its name and its calibration in its own flash, so they
+survive uploads and power cuts.
+
+1. Upload day 1 to the board and connect the page to it: the first four steps of
+   [Every day](#every-day). A board that has never been calibrated opens the calibration
+   screen on the page.
+2. **Name it.** Type a name in the box and press Enter. The board then shows up as
+   `CLUE-<name>`, so everyone can find their own. The page drops the link and reconnects
+   when you do, which is how your laptop learns the new name. Another laptop that knew the
+   board by its old name lists it that way until it connects again; the top line of the
+   board's own screen is the name it is really using.
+3. **Calibrate it.** Hold the board in the air, an arm's length from the laptop and away
+   from the table, with each of its six faces toward the floor in turn. A face goes yellow
+   when it is within 10 degrees, fills green while you hold still, and locks in after a
+   second and a half. Then set the board down on anything and leave it alone. Click a card
+   to redo that step. The holds are in the air because laptops have magnets in them and
+   most tables have steel, and both throw the magnetometer off; the set-down step only
+   uses the gyro, so the table does not matter there.
+4. **Check it.** Turn the board about: the picture on the page should follow it, the two
+   arrows should hold still, and the offset in the `mag fit` row should stay near zero.
+
+The **Recalibrate** button on the page starts over, and brings the name box back.
 
 ## Every day
 
-1. Plug in the CLUE. Open the day's sketch, such as `day1/day1.ino`.
+1. Plug in the CLUE. Open the day's sketch, such as `day1/day1.ino`, from your clone.
 2. Check that Tools > Board says **Adafruit CLUE**, which should be picked for you. Then
    pick the board under **Tools > Port**. On Windows it is a `COM` number; on a Mac it
    starts with `/dev/cu.usbmodem`. The port is the one thing the IDE will not choose for
    you, and "no upload port provided" means it was skipped.
-3. Press Upload. The board's screen comes back with the sensor readings and its Bluetooth
-   name, `CLUE-xxxx`.
-4. Open the day's web page, for example `day1/orientation.html`, in Chrome or Edge. Only
-   those browsers have Web Bluetooth. Click Connect and pick your board's name.
-5. A board that has never been calibrated shows a calibration screen on the page. First
-   type a name in its box and press Enter: the board then shows up as `CLUE-<name>`, so
-   everyone can find their own. The page drops the link and reconnects when you do: a
-   laptop lists each board under the name it learned the last time it connected, so that
-   is how yours learns the new one. Another laptop that knew the board by its old name
-   lists it that way until it connects again; the top line of the board's own screen is
-   the name it is really using. Then hold the board in the air, away from the table, with
-   each of its six faces toward the floor in turn: a face goes yellow when it is within 10
-   degrees, fills green while you hold still, and locks in after a second and a half. Then
-   set the board down on anything and leave it alone. Click a card to redo that step. The
-   page works out each sensor's offset and the board keeps them and its name in its flash,
-   so this is once per board. The Recalibrate button on the page starts over. The holds are
-   in the air because most tables have steel in them, which throws the magnetometer off;
-   the set-down step only uses the gyro, so the table does not matter there.
-6. Plug a STEMMA QT sensor into the port on the bottom edge. Within half a second the
-   screen's `Plug-in:` line and the page's plug-ins row name it, and the log says when it was
-   plugged in or pulled out. Plug it in with the board off when you can: pushing the
-   connector in while a sensor is being read can jam the I2C bus, and the board then spends
-   two seconds noticing and rebooting itself. Reading the sensor is the next step and takes
-   that sensor's library.
-7. Tap the board, tap it twice, or walk with it: the page's tap, double tap and steps rows
-   count them and say how long ago the last one was. Drop it onto something soft and the
-   fall row counts that. The motion chip spots these itself; it needs the LSM6DS3TR-C of
-   the CLUE's 2025 revision, and the board's "Started with the ..." log line says which
-   chip it has.
-8. Play music with a strong, steady beat near the board: dance music works best. After a
-   few seconds the NeoPixel on the back flashes on the beat, a new color each time, and the
-   page's beat row shows the tempo. Music with soft or loose drums mostly leaves it dark.
-   Songs often fit half or double their tempo as well, so a fast song may flash on every
-   other beat. It stops within a few seconds of the music stopping.
-9. The three ring pads P0, P1 and P2 on the bottom edge are touch pads. The screen's
-   `Touch:` line and the page's touch row count higher while a finger is on one, or on
-   anything conductive clipped to it, such as the conductive fabric on an alligator clip.
+3. Press **Upload**. The board's screen comes back with the sensor readings and its
+   Bluetooth name on the top line.
+4. Open the day's web page, such as `day1/orientation.html`, in Chrome or Edge. Click
+   **Connect** and pick your board's name. The name on the board's screen turns from
+   yellow to green.
+5. When you are done, click **Disconnect**, or close the page. Only one laptop or phone
+   can be connected to a board at a time.
+6. Save your work as you go: in GitHub Desktop, write a line saying what you changed and
+   why, click **Commit**, and at the end of the day **Push**. Small commits, often.
 
 ## When something goes wrong
 
@@ -127,6 +137,53 @@ You should now see **Adafruit CLUE** under Tools > Board > Adafruit nRF52 Boards
   of the `.ino` file on its own instead of from its folder.
 - **The web page cannot find the board:** make sure nothing else is connected to it. Only
   one laptop or phone can be connected at a time.
+
+## What is in day 1
+
+`day1.ino` is the whole picture: the pins, the list of readings, `setup()` and `loop()`.
+Anything that takes more than one library call has its own tab, starting with a header
+that says what it adds and why. Open the ones your project uses:
+
+| Tab | What it is |
+|---|---|
+| `Orientation` | Which way the board is facing, from the gyro, accelerometer and compass |
+| `Calibration` | This board's sensor offsets, kept in its flash |
+| `MotionEvents` | Taps, double taps, falls and steps, spotted by the motion chip itself |
+| `Sound` | The microphone's loudness and its spectrum |
+| `Beat` | Finds the beat in music and flashes the back NeoPixel on it |
+| `Touch` | The P0, P1 and P2 ring pads as touch pads |
+| `Plugins` | Notices STEMMA QT boards being plugged in |
+| `Bluetooth` | How the readings get to the page |
+| `Name` | A name for each board |
+| `Storage` | Small files in the chip's flash, saved so a power cut cannot spoil them |
+| `Screen` | The readings on the board's own screen |
+| `Log` | What the board has to say: `note()` and `warn()` |
+| `Watchdog` | Gets the board going again by itself when the loop stops |
+
+Things to try once it is running:
+
+- **Turn the board.** The page's picture follows it, and the arrows for down and for
+  magnetic north hold still.
+- **Plug in a STEMMA QT board.** Within half a second the screen's `Plug-in:` line and the
+  page's plug-ins row name it. Plug it in with the board off when you can: pushing the
+  connector in while a sensor is being read can jam the I2C bus, and the board then spends
+  two seconds noticing and rebooting itself. Reading the new sensor takes its own library.
+- **Tap it, tap it twice, walk with it, drop it on a pillow.** The page counts taps,
+  double taps, steps and falls and says how long ago the last one was. The motion chip
+  spots these itself; it needs the LSM6DS3TR-C of the CLUE's 2025 revision, and the
+  board's "Started with the ..." log line says which chip it has.
+- **Touch the ring pads** P0, P1 and P2 on the bottom edge. The `Touch:` line and the
+  page's touch row count higher while a finger is on one, or on anything conductive
+  clipped to it.
+- **Make a noise.** The mic row is the loudness in dBA, and the grid of dots under the
+  table is the sound split into 13 bands from bass to treble.
+- **Play dance music.** After a few seconds the NeoPixel on the back flashes on the beat,
+  a new color each time, and the beat row shows the tempo. Music with soft or loose drums
+  mostly leaves it dark, and a fast song may flash on every other beat.
+- **Lift it.** The pressure row turns into feet above sea level, and a lift from the
+  floor to over your head shows.
+- **Pick a color** for the NeoPixel on the back with the page's Back LED box, and hold
+  button B to light the white LEDs for the color sensor.
 
 Dragging a `.uf2` file onto the `CLUEBOOT` drive also programs the board without any of the
 tools above, which is a quick way to get a known-good day's firmware onto a board.

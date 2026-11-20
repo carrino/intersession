@@ -12,22 +12,36 @@ An hour or two a week between now and January is plenty. Do the setup first.
 You need a Windows or Mac laptop you are allowed to install software on. A Chromebook or
 an iPad will not work.
 
-1. Follow the setup in the [README](README.md): install the Arduino IDE, the Adafruit
-   nRF52 boards, and the Adafruit Arcada library with "Install all". It is a big download,
-   so do it at home rather than on school wifi.
-2. Download this repository: on its GitHub page, the green **Code** button, then
-   **Download ZIP**, and unzip it.
-3. Open `day1/day1.ino` from it and press **Verify** (the check mark). If it compiles with
-   no errors, your laptop is ready. You do not need a board for this.
-4. Make sure you have Chrome or Edge: the class's web page needs one of them.
+1. Follow **Set up your laptop** in the [README](README.md). It has you install the
+   Arduino IDE and the board's files (a big download, so do it at home rather than on
+   school wifi), make your own copy of this repository on GitHub, called a fork, and
+   bring that copy down to your laptop, called a clone.
+2. Its last step is to open `day1/day1.ino` from your clone and press **Verify** (the check
+   mark). If it compiles with no errors, your laptop is ready. You do not need a board for
+   this.
+3. Make your first commit, so you know the whole round trip works. In your clone, add a
+   file `students/<your GitHub name>.md` with a line or two about a project you might
+   like to build; [`PROJECTS.md`](PROJECTS.md) has ideas. In GitHub Desktop, write a
+   summary such as "Add my project idea", click **Commit**, then **Push**. Look at your
+   fork on github.com: the file should be there.
 
 If anything goes wrong, send the error message; it is much easier to fix now than in
 class.
 
+**Why a fork and not a ZIP?** In January you will be changing this code every day. With a
+fork, every change is saved with a note saying what it was and why, you can go back to
+any earlier version when something breaks, your work is backed up off your laptop, and you
+can take in fixes from the class repository without losing your own changes. Software
+everywhere is built this way, and the habits outlast any one project:
+
+- Commit small and often: one change, one commit.
+- Say why in the message, not only what.
+- Push before you close the laptop.
+
 ## 2. C++: a short reading list
 
-The CLUE runs C++, but only a small, plain part of it. You do not need classes, templates,
-exceptions or the standard library containers, which take up most of any C++ book. These
+The CLUE runs C++, but only a part of it. Templates, exceptions, inheritance and the
+standard library containers take up much of any C++ book, and they can all wait. These
 lessons from [learncpp.com](https://www.learncpp.com/) cover what the board uses, about
 ten minutes each; skip everything else on the site for now. The lesson numbers are the
 site's own.
@@ -63,6 +77,16 @@ compiler such as [OnlineGDB](https://www.onlinegdb.com/online_c++_compiler).
 - 13.7 [Introduction to structs, members, and member selection](https://www.learncpp.com/cpp-tutorial/introduction-to-structs-members-and-member-selection/)
 - 13.2 [Unscoped enumerations](https://www.learncpp.com/cpp-tutorial/unscoped-enumerations/)
 
+**Classes** (every sensor library is one, and so are the board's `Quaternion` and `MagCalibration`)
+- 14.1 [Introduction to object-oriented programming](https://www.learncpp.com/cpp-tutorial/introduction-to-object-oriented-programming/)
+- 14.2 [Introduction to classes](https://www.learncpp.com/cpp-tutorial/introduction-to-classes/)
+- 14.3 [Member functions](https://www.learncpp.com/cpp-tutorial/member-functions/)
+- 14.4 [Const class objects and const member functions](https://www.learncpp.com/cpp-tutorial/const-class-objects-and-const-member-functions/)
+- 14.5 [Public and private members and access specifiers](https://www.learncpp.com/cpp-tutorial/public-and-private-members-and-access-specifiers/)
+- 14.9 [Introduction to constructors](https://www.learncpp.com/cpp-tutorial/introduction-to-constructors/)
+- 15.2 [Classes and header files](https://www.learncpp.com/cpp-tutorial/classes-and-header-files/)
+- 21.1 [Introduction to operator overloading](https://www.learncpp.com/cpp-tutorial/introduction-to-operator-overloading/) (how `orientation * turn` multiplies two quaternions)
+
 **References and pointers** (just the introductions)
 - 12.3 [Lvalue references](https://www.learncpp.com/cpp-tutorial/lvalue-references/)
 - 12.7 [Introduction to pointers](https://www.learncpp.com/cpp-tutorial/introduction-to-pointers/)
@@ -72,9 +96,12 @@ compiler such as [OnlineGDB](https://www.onlinegdb.com/online_c++_compiler).
 - O.2 [Bitwise operators](https://www.learncpp.com/cpp-tutorial/bitwise-operators/)
 - O.3 [Bit manipulation with bitwise operators and bit masks](https://www.learncpp.com/cpp-tutorial/bit-manipulation-with-bitwise-operators-and-bit-masks/)
 
-**Then read real code:** open `day1/day1.ino` and find a struct, an enum, a `switch`, a
-static local variable, a range-based `for`, and a bit mask. Most of the rest is calling
-the libraries' objects, like `display.print()`, which reads the way it looks.
+**Then read real code:** open `day1/day1.ino` and its tabs and find a struct, an enum, a
+`switch`, a static local variable, a range-based `for`, and a bit mask. Then open
+`day1/Quaternion.h` and `day1/MagCalibration.h` and find a constructor, a const member
+function, a private member, and an overloaded operator. Much of the rest is calling the
+libraries' objects, like `display.print()`, which is a member function of a class someone
+else wrote.
 
 If you already program in another language, skim the list for what is different in C++.
 If you like paper, *Programming Arduino: Getting Started with Sketches* by Simon Monk
@@ -109,6 +136,12 @@ as a switch), and
 **Lecture 4, time and radio:**
 [Pulse Width Modulation](https://learn.sparkfun.com/tutorials/pulse-width-modulation) and
 Adafruit's [Introduction to Bluetooth Low Energy](https://learn.adafruit.com/introduction-to-bluetooth-low-energy).
+
+**Lecture 5, the physics inside:**
+[Accelerometer Basics](https://learn.sparkfun.com/tutorials/accelerometer-basics),
+[Gyroscope](https://learn.sparkfun.com/tutorials/gyroscope), and
+[Capacitors](https://learn.sparkfun.com/tutorials/capacitors), since so many sensors turn
+out to be one.
 
 ## 4. One book for the break (optional, pick one)
 

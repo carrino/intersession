@@ -49,7 +49,9 @@ and most of the time building something of their own.
 - **Phones:** iPhone or Android? Both run nRF Connect and Bluefruit Connect for poking at
   the board over Bluetooth. Chrome on Android can also open the class page; on an iPhone,
   use the apps.
-- **GitHub:** anyone have an account? Not needed, but handy for keeping their own code.
+- **GitHub:** anyone have an account? Everyone needs one: each student forks the class
+  repository and commits their work to their own copy, so the week also teaches version
+  control. Check that a school laptop will install GitHub Desktop.
 - **The week:** hours each day, working alone or in pairs, and a demo at the end: who
   comes to see it?
 - **Over the break:** how to reach each other with questions.
@@ -58,8 +60,10 @@ and most of the time building something of their own.
 
 - The reading list, [`READING.md`](READING.md), with its short C++ list. The repository is
   public, so a link works.
-- The install homework, due before winter break: the setup in the README, then open
-  `day1/day1.ino` and press Verify. If it compiles, the laptop is ready; no board needed.
+- The install homework, due before winter break: **Set up your laptop** in the README,
+  which ends with forking and cloning the repository and pressing Verify on
+  `day1/day1.ino`. If it compiles, the laptop is ready; no board needed. Then a first
+  commit pushed to their fork, as the reading list describes.
 
 ## The parts list
 
