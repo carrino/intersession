@@ -43,9 +43,6 @@ and most of the time building something of their own.
   micro-USB, so the class cables are USB-C to micro-USB; anyone with only USB-A ports gets
   one of the spare USB-A cables.
 - **Browser:** the class page needs Chrome or Edge.
-- **Phones:** iPhone or Android? Both run nRF Connect and Bluefruit Connect for poking at
-  the board over Bluetooth. Chrome on Android can also open the class page; on an iPhone,
-  use the apps.
 - **GitHub:** anyone have an account? Everyone needs one: each student forks the class
   repository and commits their work to their own copy, so the week also teaches version
   control.
