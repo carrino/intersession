@@ -85,6 +85,24 @@ them, so the compass will not be trusted here: heading comes from the gyro alone
 | Light seeker | Turns toward the brightest spot and drives to it | Light sensor | Hide from the light instead |
 | Dancing robot | Moves on the beat of the music | The beat finder in `Beat.ino` | A different move for each bar |
 
+## With the thermal camera
+
+An AMG8833: an 8×8 picture of temperature, ten times a second, from 0 to 80 °C. It was
+out of stock for the first order and is not bought yet. Eight by eight is coarse: a
+person across the room is a few warm squares. It reads to a quarter of a degree, but
+only within about 2.5 °C of the true temperature, so it shows what is warmer than what,
+not a fever.
+
+| Project | What it does | Uses | Stretch goal |
+| --- | --- | --- | --- |
+| Thermal camera | A live heat picture on the page, smoothed up from the 64 squares | AMG8833, Bluetooth | The picture on the CLUE's own screen, to carry around; a freeze button |
+| Heat detective | Find the handprint left on a table, the chair someone just left, the draughty window, the charger that is working hardest | AMG8833 | Time how long a handprint lasts on wood, metal and plastic |
+| Hand tracker | Finds the warm spot that is your hand and uses where it is as a controller | AMG8833 | Steer the marble maze or play the theremin with no board in your hand |
+| People counter | Counts people through a doorway and which way they went, with a camera that cannot recognize anyone | AMG8833 | Keep a running count of who is in the room |
+| Heat on LEDs | The picture on the 13×9 color matrix | AMG8833, IS31FL3741 | Blue to red through the whole rainbow |
+| Follow me | The rover turns toward the warmest thing it sees and drives after it | AMG8833, the rover | Keep a set distance; lose interest in radiators |
+| Heat panorama | Sweep the board round and stitch the frames into one wide picture, placed by which way it was facing | AMG8833, day 1's orientation | The whole room, floor to ceiling |
+
 ## Two boards together
 
 | Project | What it does | Uses | Stretch goal |
