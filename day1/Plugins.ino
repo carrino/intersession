@@ -20,6 +20,7 @@ Sensor plugins[] = {
   {"LTR390", 0x53, false},          // UV
   {"MLX90632", 0x3A, false},        // non-contact temperature
   {"IS31FL3741", 0x30, false},      // 13x9 RGB LED matrix
+  {"AMG8833", 0x69, false},         // 8x8 thermal camera; 0x68 if its address pads are bridged
 };
 
 void checkPlugins() {

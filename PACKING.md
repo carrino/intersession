@@ -11,8 +11,11 @@ stays home. Check with the maker space ahead of time about what they have (botto
   supply, alligator clips, conductive fabric, flux pen, and eight STEMMA QT cables (five
   50 mm, three 400 mm).
 - The Digi-Key order, for what Adafruit had run out of: five 200 mm STEMMA QT cables, four
-  STEMMA QT to male header cables for breadboards, and the 2.1 mm barrel jack to screw
-  terminal adapter that lets the 5 V supply feed a NeoDriver's terminal block.
+  STEMMA QT to male header cables for breadboards, the 2.1 mm barrel jack to screw
+  terminal adapter that lets the 5 V supply feed a NeoDriver's terminal block, and the
+  AMG8833 thermal camera. If its board has no STEMMA QT connector, solder one of the
+  header cables to it before the trip: black to ground, red to 3 V, blue to SDA, yellow
+  to SCL.
 - A Feather board to charge the LiPo batteries: the CLUE has no charging circuit, and a
   Feather charges whatever is plugged into its battery jack over USB. Most Feathers charge
   at 100 or 200 mA, so a 1200 mAh battery takes six to twelve hours: charge all three

@@ -88,7 +88,7 @@ them, so the compass will not be trusted here: heading comes from the gyro alone
 ## With the thermal camera
 
 An AMG8833: an 8×8 picture of temperature, ten times a second, from 0 to 80 °C. It was
-out of stock for the first order and is not bought yet. Eight by eight is coarse: a
+out of stock for the first order and is coming from Digi-Key. Eight by eight is coarse: a
 person across the room is a few warm squares. It reads to a quarter of a degree, but
 only within about 2.5 °C of the true temperature, so it shows what is warmer than what,
 not a fever.

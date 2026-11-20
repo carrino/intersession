@@ -63,7 +63,8 @@ and most of the time building something of their own.
 
 ## The parts list
 
-Prices are from the order. The AMG8833 thermal camera was out of stock, so it is not here.
+Prices are from the order. The AMG8833 thermal camera was out of stock at Adafruit and is
+coming from Digi-Key.
 
 **Sensors and inputs**
 
@@ -76,6 +77,7 @@ Prices are from the order. The AMG8833 thermal camera was out of stock, so it is
 | SCD-43 | True CO2, temperature, humidity | Room air monitor that says "open a window" | 1 | $49.95 |
 | LTR390 | UV and light | Sunburn meter | 1 | $4.95 |
 | MLX90632 | Non-contact temperature | Point-and-shoot thermometer | 1 | $17.50 |
+| AMG8833 | An 8×8 picture of temperature, ten times a second | Thermal camera, a hand tracker, a rover that follows you | 1 | Digi-Key |
 
 **Things that light up or move**
 

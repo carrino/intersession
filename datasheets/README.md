@@ -38,7 +38,7 @@ it sits in.
 | Part | What it is | I2C | File | Source |
 | --- | --- | --- | --- | --- |
 | VL53L1X | Time-of-flight distance: up to 4 m in the dark off a white target, about 3 m under room lights, 1.3 m or less in sunlight | 0x29 | [VL53L1X.pdf](VL53L1X.pdf) | [Adafruit](https://cdn-learn.adafruit.com/assets/assets/000/105/859/original/vl53l1x.pdf) |
-| AMG8833 | 8x8 thermal camera (Panasonic Grid-EYE); out of stock, so off the order | 0x69 | [AMG8833.pdf](AMG8833.pdf) | [Adafruit](https://cdn-learn.adafruit.com/assets/assets/000/043/261/original/Grid-EYE_SPECIFICATIONS%28Reference%29.pdf) |
+| AMG8833 | 8x8 thermal camera (Panasonic Grid-EYE), 0 to 80 °C within 2.5 °C | 0x69, or 0x68 with its address pads bridged | [AMG8833.pdf](AMG8833.pdf) | [Adafruit](https://cdn-learn.adafruit.com/assets/assets/000/043/261/original/Grid-EYE_SPECIFICATIONS%28Reference%29.pdf) |
 | MPR121 | 12 capacitive touch inputs | 0x5A | [MPR121.pdf](MPR121.pdf) | [NXP](https://www.nxp.com/docs/en/data-sheet/MPR121.pdf) |
 | DRV2605L | Haptic motor driver | 0x5A | [DRV2605L.pdf](DRV2605L.pdf) | [TI](https://www.ti.com/lit/ds/symlink/drv2605l.pdf) |
 | Vibrating mini motor disc | The motor the DRV2605L drives (datasheet in Chinese) | none | [vibration_motor_disc.pdf](vibration_motor_disc.pdf) | [Adafruit](https://cdn-shop.adafruit.com/product-files/1201/P1012_datasheet.pdf) |
