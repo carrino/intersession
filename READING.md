@@ -137,7 +137,7 @@ Adafruit's [Introduction to Bluetooth Low Energy](https://learn.adafruit.com/int
 [Capacitors](https://learn.sparkfun.com/tutorials/capacitors), since so many sensors turn
 out to be one.
 
-## 4. Watch
+## 4. Watch (optional)
 
 - [Visualizing quaternions](https://eater.net/quaternions), by Ben Eater and 3Blue1Brown:
   the math behind how the board knows which way it is pointing.
@@ -146,7 +146,6 @@ out to be one.
 
 ## 5. You don't really need this
 
-*Programming: Principles and Practice Using C++* by Bjarne Stroustrup, who invented the
-language. It is a full course in C++, it is long, and most of it goes beyond what the
-board uses. Everything this class needs is in the short list above; this is for anyone
-who wants the whole language.
+If you want a full C++ book anyway: *Programming: Principles and Practice Using C++* by
+Bjarne Stroustrup, who invented the language. It is long, and most of it goes beyond what
+the board uses.
