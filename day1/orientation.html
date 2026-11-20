@@ -18,30 +18,38 @@
     .mag { color: #f0f; }
     .accel { color: #0f0; }
     #faces { display: flex; gap: 0.5em; font-family: monospace; }
-    .face { width: 9em; padding: 0.4em; border: 1px solid #555; border-radius: 4px; text-align: center; }
+    .face { width: 9em; padding: 0.4em; border: 1px solid #555; border-radius: 4px; text-align: center; cursor: pointer; }
     .face span { display: block; min-height: 1.2em; font-size: 0.9em; }
+    #spectrum { display: block; margin-top: 0.5em; background: #000; border-radius: 6px; }
+    #data.paused { outline: 1px dashed #888; }
   </style>
 </head>
 <body>
   <div id="ui">
     <button id="connect">Connect to CLUE</button>
+    <button id="disconnect" disabled>Disconnect</button>
     <span id="status">Not connected</span>
     <label>Back LED <input type="color" id="pixel" value="#000000" disabled></label>
     <button id="recalibrate" hidden>Recalibrate</button>
     <div id="calibration" hidden>
+      <p><label>Name this board, so it is easy to find: CLUE-<input id="boardName" maxlength="12" size="12"
+        pattern="[A-Za-z0-9 _\-]*" placeholder="your name"></label> <span id="nameStatus"></span></p>
       <p>Not calibrated. Hold the board in the air, away from the desk, with each face toward the floor in turn.
-        A face goes yellow when it is close, fills green while you hold still, and locks in after a second.
-        Then set the board down on anything and leave it alone for a second: that measures the gyro.</p>
+        A face goes yellow when it is close, fills green while you hold still, and locks in after a second and a half.
+        Then set the board down on anything and leave it alone: that measures the gyro.
+        Click a card to clear it and do that one again.</p>
       <div id="faces"></div>
     </div>
     <table id="data"></table>
+    <canvas id="spectrum" width="208" height="144"></canvas>
     <pre id="log"></pre>
     <p>The arrows are the accelerometer and magnetometer rotated into the room's frame by the orientation,
       so they should hold still while the board moves: <span class="accel">down</span> straight at the floor,
       <span class="mag">mag</span> toward magnetic north and down. If they swing with the board, the orientation is off.
       Once the board is calibrated, the mag fit keeps watching for anything the stored offset missed, so its
       offset should stay near zero. The color sensor only sees what is lit: hold button B to turn on the
-      front LEDs while holding something in front of it.</p>
+      front LEDs while holding something in front of it. Selecting text in the table pauses it so it can be
+      copied; click anywhere to let it run again.</p>
   </div>
 
   <script type="importmap">
@@ -53,12 +61,13 @@
     import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
     // The CLUE's BLE service and characteristics. Must match day1.ino. Each characteristic
-    // holds little-endian floats, split into the fields listed (name, how many floats, unit),
-    // except buttons which is one byte.
+    // holds little-endian floats, split into the fields listed (name, how many, unit), except
+    // the ones marked bytes, which hold one byte per value.
     const SERVICE_UUID = 'c10e0001-5a7e-4a6b-9f3e-0b6f2d9a1c01';
     const PIXEL_UUID = 'c10e000d-5a7e-4a6b-9f3e-0b6f2d9a1c01';  // writable: red, green, blue bytes
     const LOG_UUID = 'c10e0010-5a7e-4a6b-9f3e-0b6f2d9a1c01';    // text: every note() and warn() on the board
     const CALIBRATION_UUID = 'c10e0011-5a7e-4a6b-9f3e-0b6f2d9a1c01';  // read/write: accel, gyro and mag offsets, 9 floats
+    const NAME_UUID = 'c10e0014-5a7e-4a6b-9f3e-0b6f2d9a1c01';  // read/write: the board's name as text, up to 12 characters
     const CHARACTERISTICS = [
       { uuid: 'c10e0002-5a7e-4a6b-9f3e-0b6f2d9a1c01', fields: [['quaternion', 4, 'w x y z']] },
       { uuid: 'c10e0003-5a7e-4a6b-9f3e-0b6f2d9a1c01', fields: [['accel', 3, 'm/s²'], ['gyro', 3, 'rad/s'], ['mag', 3, 'µT'],
@@ -68,11 +77,19 @@
       { uuid: 'c10e0008-5a7e-4a6b-9f3e-0b6f2d9a1c01', fields: [['humidity', 1, '%']] },
       { uuid: 'c10e0009-5a7e-4a6b-9f3e-0b6f2d9a1c01', fields: [['color', 4, 'r g b clear']] },
       { uuid: 'c10e000e-5a7e-4a6b-9f3e-0b6f2d9a1c01', fields: [['proximity', 1, '0 far to 255 near']] },
-      { uuid: 'c10e000a-5a7e-4a6b-9f3e-0b6f2d9a1c01', fields: [['mic', 1, 'dB SPL, approx']] },
-      { uuid: 'c10e000b-5a7e-4a6b-9f3e-0b6f2d9a1c01', fields: [['buttons', 1, 'A=1 B=2']] },
+      { uuid: 'c10e000a-5a7e-4a6b-9f3e-0b6f2d9a1c01', fields: [['mic', 1, 'dBA, approx']] },
+      { uuid: 'c10e000b-5a7e-4a6b-9f3e-0b6f2d9a1c01', bytes: true, fields: [['buttons', 1, 'A=1 B=2']] },
+      { uuid: 'c10e0016-5a7e-4a6b-9f3e-0b6f2d9a1c01', bytes: true, fields: [['spectrum', 13, '13 bands, 100 Hz to 8 kHz, drawn below']] },
+      { uuid: 'c10e0017-5a7e-4a6b-9f3e-0b6f2d9a1c01', readOnConnect: true, fields: [['beat', 2, "the music's tempo, beats counted"]] },
       { uuid: 'c10e000c-5a7e-4a6b-9f3e-0b6f2d9a1c01', fields: [['mag fit', 5, 'offset x y z, radius µT, faces seen']] },
-      { uuid: 'c10e000f-5a7e-4a6b-9f3e-0b6f2d9a1c01', fields: [['stats', 3, 'IMU samples/s, tilt error °, missed updates']] },
+      { uuid: 'c10e000f-5a7e-4a6b-9f3e-0b6f2d9a1c01', fields: [['stats', 4, 'IMU samples/s, tilt error °, missed updates, stall reboots']] },
+      { uuid: 'c10e0012-5a7e-4a6b-9f3e-0b6f2d9a1c01', fields: [['plug-ins', 1, 'STEMMA QT sensors answering']] },
+      { uuid: 'c10e0013-5a7e-4a6b-9f3e-0b6f2d9a1c01', fields: [['touch', 3, 'P0 P1 P2 pad counts, higher when touched']] },
+      { uuid: 'c10e0015-5a7e-4a6b-9f3e-0b6f2d9a1c01', readOnConnect: true,  // sent only when a count goes up
+        fields: [['tap', 1, 'since power-on'], ['double tap', 1, 'since power-on'], ['fall', 1, 'since power-on'], ['steps', 1, 'since power-on']] },
     ];
+    // The plug-in sensors the board knows, in the order of its bits. Must match day1.ino.
+    const PLUGINS = ['VL53L1X', 'NeoDriver', 'MPR121/DRV2605', 'ANO encoder', 'PA1010D', 'SCD-43', 'LTR390', 'MLX90632', 'IS31FL3741', 'AMG8833'];
 
     // ---- 3D scene ----
     const scene = new THREE.Scene();
@@ -144,12 +161,15 @@
     resize();
 
     const VECTORS = new Set(['accel', 'gyro', 'mag', 'accel NED', 'mag NED']);  // rows that get a length column
+    const EVENTS = new Set(['tap', 'double tap', 'fall', 'steps']);  // counts; the page notes when each goes up
+    const lastSeen = {};  // event name -> when this page saw its count go up
     const latest = {};  // field name -> most recent values
     const hz = {};      // field name -> packets received per second, for debugging the link
     const counts = {};
     renderer.setAnimationLoop(() => {
       renderer.render(scene, camera);
       showTable();
+      drawSpectrum();
     });
     setInterval(() => {
       const summary = [];
@@ -158,7 +178,7 @@
         summary.push(`${name} ${counts[name]}`);
         counts[name] = 0;
       }
-      if (summary.length) {
+      if (summary.length && device?.gatt.connected) {  // not while disconnected, so the reconnect tries stand out
         log('packets/s:', summary.join(', '));
       }
     }, 1000);
@@ -167,6 +187,8 @@
     const status = document.getElementById('status');
     const table = document.getElementById('data');
     const pixelInput = document.getElementById('pixel');
+    const disconnectButton = document.getElementById('disconnect');
+    const nameInput = document.getElementById('boardName');
 
     // Everything that happens on the Bluetooth side is logged to the browser console
     // (F12), with the time since the page loaded, so a stall can be traced.
@@ -182,81 +204,138 @@
       device = await navigator.bluetooth.requestDevice({ filters: [{ services: [SERVICE_UUID] }] });
       log('chose', device.name, device.id);
       device.addEventListener('gattserverdisconnected', reconnect);
+      disconnectButton.disabled = false;
       await subscribe();
     }
 
+    // The Disconnect button: hang up and stay hung up, so the board is free for another
+    // laptop. Forgetting the device first is what tells reconnect() this was on purpose.
+    function disconnect() {
+      const leaving = device;
+      device = null;
+      leaving.gatt.disconnect();
+      disconnectButton.disabled = true;
+      pixelInput.disabled = true;
+      status.textContent = 'Disconnected';
+      log('disconnected by the button');
+    }
+
     // A board that reset drops the link and is advertising again a few seconds later. Web
-    // Bluetooth does nothing about that on its own, so try to reconnect once a second for
-    // ten minutes. Discovery runs again because the old characteristic handles died with
-    // the link.
+    // Bluetooth does nothing about that on its own, so keep trying to reconnect, a second
+    // apart, 600 times. Discovery runs again because the old characteristic handles died
+    // with the link. A try can hang without ever failing (Windows can wait forever on a
+    // board that is not answering), so each one gives up after RECONNECT_TIMEOUT_MS.
+    const RECONNECT_TIMEOUT_MS = 10000;
+    let reconnecting = false;
     async function reconnect() {
+      if (reconnecting || !device) {
+        return;  // a try that connected and then dropped fires this again; or the button hung up
+      }
+      reconnecting = true;
       const lost = device;
       log('disconnected');
       pixelInput.disabled = true;
       for (let tries = 1; tries <= 600 && device === lost; tries++) {
         status.textContent = `Disconnected, reconnecting (try ${tries})`;
         await new Promise(resolve => setTimeout(resolve, 1000));
+        if (device !== lost) {
+          break;  // the Disconnect button, or another board was chosen, while we waited
+        }
         try {
-          await subscribe();
+          await withTimeout(subscribe(), RECONNECT_TIMEOUT_MS);
+          reconnecting = false;
           return;
         } catch (err) {
           log('reconnect failed:', err.message);
+          lost.gatt.disconnect();  // cancels a connect still waiting, so the next try starts clean
         }
       }
+      reconnecting = false;
       status.textContent = 'Disconnected';
     }
 
+    // The promise's result, or an error if it takes longer than ms.
+    function withTimeout(promise, ms) {
+      const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error(`no answer in ${ms / 1000} s`)), ms));
+      return Promise.race([promise, timeout]);
+    }
+
     // Everything after the device is chosen: connect, find the service, subscribe to it all.
+    // The listeners from the connection before are dropped first: the browser keeps
+    // delivering packets to them after a reconnect, so each packet would count twice.
+    let listeners = null;
     async function subscribe() {
+      listeners?.abort();
+      listeners = new AbortController();
+      const untilNextConnect = { signal: listeners.signal };
       const server = await device.gatt.connect();
       log('connected, discovering service');
       const service = await server.getPrimaryService(SERVICE_UUID);
       for (const spec of CHARACTERISTICS) {
         const characteristic = await service.getCharacteristic(spec.uuid);
-        characteristic.addEventListener('characteristicvaluechanged', event => onValue(spec, event.target.value));
+        characteristic.addEventListener('characteristicvaluechanged', event => onValue(spec, event.target.value), untilNextConnect);
         await characteristic.startNotifications();
+        if (spec.readOnConnect) {
+          onValue(spec, await characteristic.readValue());  // it only notifies on change, so fetch where it stands
+        }
         log('subscribed to', spec.fields.map(f => f[0]).join('+'));
       }
 
       const logChr = await service.getCharacteristic(LOG_UUID);
-      logChr.addEventListener('characteristicvaluechanged', event => showLog(event.target.value));
+      logChr.addEventListener('characteristicvaluechanged', event => showLog(event.target.value), untilNextConnect);
       await logChr.startNotifications();
-      showLog(await logChr.readValue());  // anything it said before we connected, such as why it rebooted
 
       const pixel = await service.getCharacteristic(PIXEL_UUID);
       pixelInput.oninput = () => sendPixel(pixel);
       pixelInput.disabled = false;
+
+      const name = await service.getCharacteristic(NAME_UUID);
+      nameInput.value = new TextDecoder().decode(await name.readValue());
+      nameInput.onchange = () => sendName(name);
 
       calibrationChr = await service.getCharacteristic(CALIBRATION_UUID);
       const stored = await calibrationChr.readValue();
       const calibrated = Array.from({ length: 9 }, (_, i) => stored.getFloat32(4 * i, true)).some(v => v !== 0);
       log('calibrated:', calibrated);
       showCalibrationScreen(!calibrated);
-      status.textContent = `Connected to ${device.name}`;
+      showConnected();
       log('ready');
+    }
+
+    // Shows the board's name as the board itself reports it. device.name is what this
+    // laptop remembers from the last time it connected, so it lags behind a rename.
+    function showConnected() {
+      status.textContent = `Connected to ${nameInput.value ? 'CLUE-' + nameInput.value : device.name}`;
     }
 
     // Splits a characteristic's bytes into its fields and keeps the latest values. A packet
     // shorter than expected (the BLE MTU was not raised) still yields the fields that fit.
     const seen = {};  // characteristic uuid -> true once its first packet was logged
     function onValue(spec, data) {
-      const expected = spec.fields.reduce((sum, [, count]) => sum + 4 * count, 0);
+      const size = spec.bytes ? 1 : 4;
+      const expected = spec.fields.reduce((sum, [, count]) => sum + size * count, 0);
       if (!seen[spec.uuid]) {
         seen[spec.uuid] = true;
         log('first packet for', spec.fields[0][0], `${data.byteLength} bytes, expected ${expected}`);
       }
-      if (data.byteLength !== 1 && data.byteLength < expected) {
+      if (data.byteLength < expected) {
         status.textContent = `${spec.fields[0][0]} packet is ${data.byteLength} bytes, expected ${expected} (BLE MTU too small?)`;
       }
       let offset = 0;
       for (const [name, count] of spec.fields) {
-        if (data.byteLength !== 1 && offset + 4 * count > data.byteLength) {
+        if (offset + size * count > data.byteLength) {
           break;
         }
-        latest[name] = data.byteLength === 1
-          ? [data.getUint8(0)]
-          : Array.from({ length: count }, (_, i) => data.getFloat32(offset + 4 * i, true));
-        offset += 4 * count;
+        const before = latest[name];
+        latest[name] = Array.from({ length: count },
+          (_, i) => spec.bytes ? data.getUint8(offset + i) : data.getFloat32(offset + 4 * i, true));
+        if (EVENTS.has(name) && before && latest[name][0] > before[0]) {
+          lastSeen[name] = performance.now();
+        }
+        if (name === 'beat' && before && latest[name][1] > before[1]) {
+          lastBeat = performance.now();  // the board counted a beat: the dot grid flashes
+        }
+        offset += size * count;
         counts[name] = (counts[name] || 0) + 1;
       }
       if (!calibrationPanel.hidden && spec.fields[0][0] === 'accel') {
@@ -276,9 +355,27 @@
       }
     }
 
+    // Redrawing the table would wipe out a selection, so it holds still while text in it is
+    // being selected, from the moment the mouse goes down until the selection is cleared.
+    let pointerDownInTable = false;
+    table.addEventListener('pointerdown', () => { pointerDownInTable = true; });
+    addEventListener('pointerup', () => { pointerDownInTable = false; });
+    function selectingInTable() {
+      const selection = getSelection();
+      return pointerDownInTable || (!selection.isCollapsed && selection.containsNode(table, true));
+    }
+    // A click on the 3D view leaves any selection in place, so clear it there, or the table
+    // would stay paused.
+    renderer.domElement.addEventListener('pointerdown', () => getSelection().removeAllRanges());
+
     // One row per field: its values, the vector length for 3-vectors, the unit, and how
     // many packets a second its characteristic is arriving at.
     function showTable() {
+      const paused = selectingInTable();
+      table.classList.toggle('paused', paused);
+      if (paused) {
+        return;
+      }
       const rows = CHARACTERISTICS.flatMap(spec => spec.fields).map(([name, count, unit]) => {
         const values = latest[name] || [];
         const number = v => v.toFixed(2).padStart(8);  // fixed width, so columns never shift
@@ -289,8 +386,32 @@
         if (name === 'mag fit' && values.length) {
           cells[4] = facesSeen(values[4]);
         }
+        if (name === 'plug-ins' && values.length) {
+          cells[0] = PLUGINS.filter((_, i) => values[0] & (1 << i)).join(' ') || 'none';
+        }
         if (name === 'color' && values.length) {
           cells[4] = colorSwatch(values);
+        }
+        if (name === 'spectrum') {
+          cells.length = 0;  // the bands are drawn under the table; here just the loudest
+          const loudest = values.indexOf(Math.max(...values));
+          const label = values.length ? (values[loudest] ? `loudest ${bandName(loudest)}` : 'quiet') : '';
+          cells.push(label.padStart(15));  // as wide as 'loudest 1.8 kHz', so the columns never shift
+        }
+        if (name === 'beat' && values.length) {
+          cells[0] = (values[0] ? `${Math.round(values[0])} BPM` : 'no steady beat').padStart(14);
+          cells[1] = String(values[1]);
+        }
+        if (name === 'pressure' && values.length) {
+          cells[1] = `≈ ${Math.round(feetAboveSeaLevel(values[0]))} ft above sea level`;
+        }
+        if (EVENTS.has(name) && values.length) {
+          cells[0] = String(values[0]).padStart(8);
+          if (lastSeen[name]) {
+            cells[1] = `last ${ago((performance.now() - lastSeen[name]) / 1000)}`;
+          } else {
+            cells[1] = values[0] ? 'before connecting' : 'none yet';
+          }
         }
         while (cells.length < 5) {
           cells.push('');  // pad so the unit and rate columns line up across rows
@@ -312,7 +433,8 @@
       } else {
         console.log('DEVICE: ' + text);
       }
-      document.getElementById('log').textContent += `${new Date().toLocaleTimeString()}  ${text}\n`;
+      // append() adds the line without replacing the text already there, so a selection in it survives.
+      document.getElementById('log').append(`${new Date().toLocaleTimeString()}  ${text}\n`);
     }
 
     // The color counts scaled so the strongest channel is full brightness: the hue, not the amount of light.
@@ -320,6 +442,76 @@
       const scale = 255 / Math.max(r, g, b, 1);
       return `<span style="display:inline-block; width:1.2em; height:1.2em; vertical-align:middle;
         background:rgb(${r * scale}, ${g * scale}, ${b * scale})"></span>`;
+    }
+
+    // Height from air pressure, for standard air: 1013.25 hPa at sea level, about 3.3 ft per
+    // 0.12 hPa near the ground. Weather moves sea-level pressure by tens of hPa, so the number
+    // drifts by hundreds of feet from day to day, but lifting the board a foot shows at once.
+    function feetAboveSeaLevel(hPa) {
+      const meters = 44330 * (1 - Math.pow(hPa / 1013.25, 1 / 5.255));
+      return meters * 3.28084;
+    }
+
+    // ---- Sound spectrum ----
+    // The board's 13 bands as a 13 by 9 grid of dots, like Adafruit's LED matrix visualizer:
+    // low notes on the left, each column as tall as its band is loud, with a peak dot that
+    // falls back down at SPECTRUM_FALL rows a second.
+    const SPECTRUM_ROWS = 9, SPECTRUM_FALL = 9;
+    const spectrumCanvas = document.getElementById('spectrum');
+    const spectrumPeaks = new Array(13).fill(0);
+    const BEAT_FLASH_MS = 150;  // how long the grid's backdrop glows after a beat
+    let lastBeat = -Infinity;   // when the board last counted a beat
+    let lastSpectrumDraw = performance.now();
+
+    function drawSpectrum() {
+      const now = performance.now();
+      const fall = (now - lastSpectrumDraw) / 1000 * SPECTRUM_FALL;
+      lastSpectrumDraw = now;
+      const levels = latest.spectrum || new Array(13).fill(0);
+      const context = spectrumCanvas.getContext('2d');
+      const cell = spectrumCanvas.width / levels.length;
+      context.clearRect(0, 0, spectrumCanvas.width, spectrumCanvas.height);
+      const glow = Math.max(0, 1 - (now - lastBeat) / BEAT_FLASH_MS);
+      context.fillStyle = `rgba(255, 255, 255, ${0.3 * glow})`;
+      context.fillRect(0, 0, spectrumCanvas.width, spectrumCanvas.height);
+      levels.forEach((level, column) => {
+        const height = Math.round(level / 255 * SPECTRUM_ROWS);
+        spectrumPeaks[column] = Math.max(spectrumPeaks[column] - fall, height);
+        const peak = Math.round(spectrumPeaks[column]) - 1;
+        const hue = column * 270 / (levels.length - 1);  // red for bass through to violet
+        for (let row = 0; row < SPECTRUM_ROWS; row++) {
+          if (row < height) {
+            context.fillStyle = `hsl(${hue}, 100%, 50%)`;
+          } else if (row === peak) {
+            context.fillStyle = `hsl(${hue}, 100%, 85%)`;
+          } else {
+            context.fillStyle = '#1a1a1a';
+          }
+          context.beginPath();
+          context.arc((column + 0.5) * cell, (SPECTRUM_ROWS - row - 0.5) * cell, cell * 0.35, 0, 2 * Math.PI);
+          context.fill();
+        }
+      });
+    }
+
+    // The middle of a band, matching the board's split of 100 Hz to 8 kHz into 13 equal ratios.
+    function bandName(band) {
+      const hz = 100 * Math.pow(8000 / 100, (band + 0.5) / 13);
+      return hz < 1000 ? `${Math.round(hz)} Hz` : `${(hz / 1000).toFixed(1)} kHz`;
+    }
+
+    // A number of seconds as people say it: just now, 40 s ago, 2 min ago, 3 h ago.
+    function ago(seconds) {
+      if (seconds < 2) {
+        return 'just now';
+      }
+      if (seconds < 60) {
+        return `${Math.round(seconds)} s ago`;
+      }
+      if (seconds < 3600) {
+        return `${Math.floor(seconds / 60)} min ago`;
+      }
+      return `${Math.floor(seconds / 3600)} h ago`;
     }
 
     // The mag fit's last value is a bit per face the board has pointed at the floor.
@@ -342,40 +534,44 @@
       { name: '+z down', axis: [0, 0, 1] }, { name: '-z down', axis: [0, 0, -1] },
       { name: 'set down' },
     ];
-    const HOLD_SAMPLES = 10;    // one second of the 10 Hz motion packets
+    const HOLD_SAMPLES = 15;    // a second and a half of the 10 Hz motion packets
     const HAND_WOBBLE = 0.5;    // m/s²: how far the accel may wander in a hand-held second, about 3°
     const RESTING_ACCEL = 0.1;  // m/s² and
     const RESTING_GYRO = 0.02;  // rad/s: how far the readings may wander in a set-down second
-    const POINTING_DOT = Math.cos(15 * Math.PI / 180);  // how close to straight down a face must be
+    const POINTING_DOT = Math.cos(10 * Math.PI / 180);  // a face must be within 10 degrees of straight down
     const calibrationPanel = document.getElementById('calibration');
     const recalibrateButton = document.getElementById('recalibrate');
-    const cards = STEPS.map(step => {
+    const cards = STEPS.map((step, i) => {
       const card = document.createElement('div');
       card.className = 'face';
       card.innerHTML = `<b>${step.name}</b><span></span>`;
+      card.onclick = () => clearStep(i);
       document.getElementById('faces').appendChild(card);
       return card;
     });
     let calibrationChr = null;
     let held = [];    // per step, the still readings collected so far
-    let locked = [];  // per step, the average reading once a second of them was held
+    let locked = [];  // per step, the average reading once the hold was long enough
     let last = null;  // the previous packet, which a new hold is judged still against
 
     function showCalibrationScreen(show) {
-      held = STEPS.map(() => []);
-      locked = STEPS.map(() => null);
-      cards.forEach(card => {
-        card.style.background = '';
-        card.lastChild.textContent = '';
-      });
+      STEPS.forEach((_, i) => clearStep(i));
       calibrationPanel.hidden = !show;
       recalibrateButton.hidden = show;
+    }
+
+    // Forgets one step's reading so it can be done again.
+    function clearStep(i) {
+      held[i] = [];
+      locked[i] = null;
+      cards[i].style.background = '';
+      cards[i].lastChild.textContent = '';
     }
 
     // Runs on each motion packet while the calibration screen is up. The accelerometer
     // reads the push holding the board up, so the face toward the floor reads minus g on
     // its axis. Still means the readings stay near the first reading of the hold, which
-    // does not depend on the gyro's own offset; moving starts that step's second over.
+    // does not depend on the gyro's own offset; moving starts that step's hold over.
     function calibrate() {
       const { accel, gyro, mag } = latest;
       STEPS.forEach((step, i) => {
@@ -394,7 +590,7 @@
             ? locked[i].accel.map(v => v.toFixed(2)).join(' ')
             : locked[i].gyro.map(v => v.toFixed(3)).join(' ');
         }
-        const green = 100 * held[i].length / HOLD_SAMPLES;  // the sweep: green from the left as the second fills
+        const green = 100 * held[i].length / HOLD_SAMPLES;  // the sweep: green from the left as the hold fills
         cards[i].style.background = pointing ? `linear-gradient(90deg, #060 ${green}%, #660 ${green}%)` : '';
       });
       last = { accel, gyro };
@@ -461,6 +657,22 @@
       return [0, 1, 2].map(i => m[i][4] / m[i][i]);
     }
 
+    // Saves the name box on the board, which then advertises as CLUE-<name>. Runs when the
+    // box loses focus or Enter is pressed. Empty goes back to the board's default name.
+    // Then hangs up, which the page answers by reconnecting: a laptop lists a board under
+    // the name it learned when it last connected, so this is how it learns the new one.
+    async function sendName(name) {
+      const nameStatus = document.getElementById('nameStatus');
+      if (!nameInput.checkValidity()) {
+        nameStatus.textContent = 'letters, digits, spaces, - and _ only';
+        return;
+      }
+      await name.writeValue(new TextEncoder().encode(nameInput.value));
+      nameStatus.textContent = 'saved';
+      log('named', nameInput.value, 'and reconnecting so this laptop learns the name');
+      device.gatt.disconnect();
+    }
+
     // Writes the color picker's value to the board as three bytes. The picker fires faster
     // than BLE writes finish, so skip ahead to the latest color instead of queueing them all.
     let sendingPixel = false;
@@ -485,6 +697,7 @@
         console.error(err);
         status.textContent = err.message;
       });
+      disconnectButton.onclick = disconnect;
     } else {
       status.textContent = 'Web Bluetooth needs Chrome or Edge';
     }
