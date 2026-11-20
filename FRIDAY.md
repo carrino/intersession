@@ -60,15 +60,15 @@ and most of the time building something of their own.
 
 ## The parts list
 
-Prices are from the order. The AMG8833 thermal camera was out of stock at Adafruit and is
-coming from Digi-Key. Each part's name links to its page, with pictures and what it can
+Prices are from the cart; nothing is ordered yet. The AMG8833 thermal camera is out of
+stock at Adafruit and will come from Digi-Key. Each part's name links to its page, with pictures and what it can
 do.
 
 **Sensors and inputs**
 
 | Part | What it does | A project | Qty | Price |
 | --- | --- | --- | --- | --- |
-| [VL53L1X](https://www.adafruit.com/product/3967) | Distance by timing light: about 3 m indoors off a light wall, less in sunlight | Theremin, parking sensor | 1 | $14.95 |
+| [VL53L4CX](https://www.adafruit.com/product/5425) | Distance by timing light: about 4 m indoors off a light wall, less in daylight | Theremin, parking sensor, the rover's eyes | 1 | $14.95 |
 | [MPR121](https://www.adafruit.com/product/4830) | 12 capacitive touch inputs, alligator-clip pads | Fruit piano, touch keyboard | 3 | $6.95 |
 | [ANO encoder](https://www.adafruit.com/product/6310) | Dial with five buttons | Menus, a game controller | 2 | $13.95 |
 | [PA1010D](https://www.adafruit.com/product/4415) | GPS | Track a walk; needs a window or outdoors | 1 | $29.95 |
@@ -87,13 +87,16 @@ do.
 | [NeoPixel stick, 8 RGBW](https://www.adafruit.com/product/2868) | A bar with a true white LED in each pixel | A desk lamp you can dim | 2 | $7.95 |
 | [NeoDriver](https://www.adafruit.com/product/5766) | Drives a NeoPixel strip over I2C, with 5 V data | A meter-long light strip | 2 | $7.50 |
 | [IS31FL3741](https://www.adafruit.com/product/5201) | 13×9 RGB LED matrix | Scrolling text, snake, a sensor graph | 1 | $14.95 |
-| Micro servo | Moves something, on pads 0 to 2 | A sensor that points or waves | not ordered | |
+| [Rover chassis kit](https://www.adafruit.com/product/2939) | Two wheels, two motors and a metal frame | Maze solver, line follower, a robot that follows you | 1 | $24.95 |
+| [Motor bonnet](https://www.adafruit.com/product/4280) | Drives the rover's motors over I2C | Goes with the rover | 1 | $22.50 |
+| Micro servo | Moves something, on pads 0 to 2 | A sensor that points or waves | not in the cart | |
 
-**Power and supplies:** five [3×AAA holders](https://www.adafruit.com/product/727), three
+**Power and supplies:** five [3×AAA holders](https://www.adafruit.com/product/727), a [4×AA holder](https://www.adafruit.com/product/830) for the
+rover's motors, three
 [1200 mAh LiPo batteries](https://www.adafruit.com/product/258) (charged on a Feather board: the CLUE cannot charge
 them), a [5 V 2 A supply](https://www.adafruit.com/product/276) for the LED strips with a barrel jack to screw terminal
 adapter, thirteen STEMMA QT cables (50, 200 and 400 mm) and four that end in header pins
-for a breadboard, alligator clips, conductive fabric, a flux pen. Adafruit also sent a
+for a breadboard, alligator clips, conductive fabric, a flux pen. The cart also has a
 free KB2040 (an RP2040 board).
 
 ## After the meeting

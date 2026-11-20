@@ -41,8 +41,8 @@ day 1's sketch that already does the hard part, named where they do.
 
 | Project | What it does | Part | Stretch goal |
 | --- | --- | --- | --- |
-| Theremin | Hand distance sets the pitch | [VL53L1X][vl53l1x] | Second hand controls volume through tilt |
-| Parking sensor | Beeps faster as something gets closer | [VL53L1X][vl53l1x] | Distance on the screen |
+| Theremin | Hand distance sets the pitch | [VL53L4CX][vl53l4cx] | Second hand controls volume through tilt |
+| Parking sensor | Beeps faster as something gets closer | [VL53L4CX][vl53l4cx] | Distance on the screen |
 | Fruit piano | Twelve keys made of bananas, foil or pencil drawings | [MPR121][mpr121] | Record and play back |
 | Buzzing compass | Buzzes when facing north; wear it | [DRV2605L][drv2605l] and [motor][motor-disc] | Buzz toward a saved spot |
 | Silent pager | A phone writes a characteristic and the board buzzes | [DRV2605L][drv2605l] and [motor][motor-disc] | Patterns that mean different things |
@@ -60,7 +60,7 @@ day 1's sketch that already does the hard part, named where they do.
 | Beat you can feel | The motor taps out the beat of music playing in the room | [DRV2605L][drv2605l] and [motor][motor-disc], the beat finder | A wristband on a battery |
 | Catch the light | One LED races round the ring; press the button when it reaches the top | [NeoPixel ring][ring] | Gets faster each round; two players |
 | Timer ring | The ring empties as time runs down, then flashes | [NeoPixel ring][ring] | Set the time with a tilt or the touch pads |
-| Speed trap | Clocks a toy car or a rolling ball from how fast the distance changes | [VL53L1X][vl53l1x] | Chart the run and find the acceleration |
+| Speed trap | Clocks a toy car or a rolling ball from how fast the distance changes | [VL53L4CX][vl53l4cx] | Chart the run and find the acceleration |
 | Water level | Foil strips on the outside of a cup sense the water through it | [MPR121][mpr121] | Fill-me reminder for a plant |
 | Plant in a jar | Watch a plant take in CO2 in the light and give it back in the dark | [SCD-43][scd43] | Compare two plants; the same with a person breathing |
 | Sunscreen tester | How much UV gets through sunglasses, a window, or sunscreen on cling film | [LTR390][ltr390] | Rank brands; SPF from the numbers |
@@ -72,16 +72,16 @@ day 1's sketch that already does the hard part, named where they do.
 
 A two-wheeled chassis with the CLUE riding on top. It needs the [chassis kit][chassis],
 the [motor bonnet][bonnet] to drive its two motors, and a [4×AA holder][aa-holder] to
-power them, which are on the list to order but not bought yet. The rover has no wheel
-sensors, so it cannot tell how far it has gone; the CLUE's gyro tells it which way it is
-facing, and that is what all of these lean on. The motors have magnets in them, so the
-compass will not be trusted here: heading comes from the gyro alone.
+power them. There is one rover. It has no wheel sensors, so it cannot tell how far it has
+gone; the CLUE's gyro tells it which way it is facing, and that is what all of these lean
+on. The motors have magnets in them, so the compass will not be trusted here: heading
+comes from the gyro alone.
 
 | Project | What it does | Uses | Stretch goal |
 | --- | --- | --- | --- |
 | Drive a square | Straight lines and exact quarter turns, ending where it started | The gyro's heading, the motors | A triangle, a star, your initials |
-| Obstacle avoider | Drives until something is close, turns away, carries on | [Distance sensor][vl53l1x] facing forward | Pick the clearer side by looking both ways first |
-| Maze solver | Finds its way out of a cardboard maze by keeping one hand on the wall | [Distance sensor][vl53l1x], the gyro's heading | Draw the maze on the page as it explores; remember the way and run it again faster |
+| Obstacle avoider | Drives until something is close, turns away, carries on | [Distance sensor][vl53l4cx] facing forward | Pick the clearer side by looking both ways first |
+| Maze solver | Finds its way out of a cardboard maze by keeping one hand on the wall | [Distance sensor][vl53l4cx], the gyro's heading | Draw the maze on the page as it explores; remember the way and run it again faster |
 | Line follower | Follows a dark line on the floor | The color sensor facing down, lit by the white LEDs | A fork in the line; a faster lap |
 | Remote control | Tilt a second board, or a phone, to steer | Bluetooth, day 1's orientation | Drive it out of sight using only what its sensors report |
 | Light seeker | Turns toward the brightest spot and drives to it | Light sensor | Hide from the light instead |
@@ -90,10 +90,9 @@ compass will not be trusted here: heading comes from the gyro alone.
 ## With the thermal camera
 
 An [AMG8833][amg8833]: an 8×8 picture of temperature, ten times a second, from 0 to
-80 °C. It was out of stock for the first order and is coming from Digi-Key. Eight by eight
-is coarse: a person across the room is a few warm squares. It reads to a quarter of a
-degree, but only within about 2.5 °C of the true temperature, so it shows what is warmer
-than what, not a fever.
+80 °C. Eight by eight is coarse: a person across the room is a few warm squares. It reads
+to a quarter of a degree, but only within about 2.5 °C of the true temperature, so it
+shows what is warmer than what, not a fever.
 
 | Project | What it does | Uses | Stretch goal |
 | --- | --- | --- | --- |
@@ -124,7 +123,7 @@ committing.
 | Project | What it does | Uses | The hard part |
 | --- | --- | --- | --- |
 | Pulse reader | A fingertip on the color sensor, lit by the white LEDs, shows a heartbeat | Color sensor, white LEDs | The pulse is a ripple of about 1% on a signal that moves when the finger does |
-| Room mapper | Turn the board on the spot and the page draws the walls around it | [VL53L1X][vl53l1x], day 1's orientation | Lining up each distance with the heading it was taken at. Under ordinary room lights the sensor reaches about 3 m off a light wall and under 2 m off a dark one, less near a sunny window, and its beam is 27° wide: good for a small room or a hallway, blurry and short for a classroom. A narrow-beam, longer-range sensor would do a big room |
+| Room mapper | Turn the board on the spot and the page draws the walls around it | [VL53L4CX][vl53l4cx], day 1's orientation | Lining up each distance with the heading it was taken at. Indoors the sensor reaches about 4 m off a light wall and 2 m off a dark one, less in daylight, and its beam is 18° wide: enough to reach a classroom's walls, with the corners coming out soft |
 | Vowel spotter | Tells "ee" from "oo" from "ah" by the shape of the spectrum | Microphone, the spectrum | Voices differ; it needs training on each speaker |
 | A better beat finder | Make `Beat.ino` follow rock, jazz or a song with no drums | Microphone, the beat finder | Soft onsets are hard to spot, and real players speed up and slow down |
 
@@ -136,7 +135,7 @@ committing.
 - What would you add with a spare day?
 
 [clue]: https://www.adafruit.com/product/4500
-[vl53l1x]: https://www.adafruit.com/product/3967
+[vl53l4cx]: https://www.adafruit.com/product/5425
 [mpr121]: https://www.adafruit.com/product/4830
 [drv2605l]: https://www.adafruit.com/product/2305
 [motor-disc]: https://www.adafruit.com/product/1201

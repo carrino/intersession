@@ -463,7 +463,7 @@ Pick the rows the class's projects use.
 | Light and color | Photodiodes: light knocks electrons loose in silicon, giving a current that follows the brightness. Four of them sit behind red, green, blue and clear filters | Colored paper, lit by the white LEDs (button B) |
 | Proximity and gesture | An infrared LED flashes, and more of the flash bounces back the closer something is. Four photodiodes side by side see which way a hand went | White paper, then black, at the same distance: it measures the bounce, not the distance |
 | Touch pads | A finger is a conductor. Near the pad it adds capacitance, so the pad takes longer to discharge | A fingertip, then a banana on an alligator clip |
-| Distance (VL53L1X) | Times a flash of infrared laser light out and back, counting single photons. Light covers 30 cm in a billionth of a second | A sheet of paper at 10 cm, then at 1 m |
+| Distance (VL53L4CX) | Times a flash of infrared laser light out and back, counting single photons. Light covers 30 cm in a billionth of a second | A sheet of paper at 10 cm, then at 1 m |
 | Thermometer gun, thermal camera | Everything warm glows in infrared, more the hotter it is. The glow warms a tiny absorber, and a stack of junctions between two metals turns the warmth into a voltage | A hand, a cold drink, a window |
 | CO2 (SCD-43) | CO2 soaks up one particular color of infrared. The sensor flashes that color into a small chamber; the gas that absorbs it warms and swells with each flash, which makes a sound, and a microphone hears how loud | Breathe near it; then open a window |
 | UV (LTR390) | A photodiode that answers to ultraviolet | Sunlight straight, then through a window and through sunglasses |

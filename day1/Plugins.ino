@@ -11,7 +11,7 @@
 // Each is a bit of readings.plugins, in this order, and orientation.html has the same list.
 // The MPR121 and the DRV2605 both answer at 0x5A, so the address cannot tell those apart.
 Sensor plugins[] = {
-  {"VL53L1X", 0x29, false},         // distance
+  {"VL53L4CX", 0x29, false},        // distance
   {"NeoDriver", 0x60, false},       // NeoPixel strip driver
   {"MPR121/DRV2605", 0x5A, false},  // touch pads / haptic motor
   {"ANO encoder", 0x49, false},     // dial with buttons
