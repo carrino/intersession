@@ -3,7 +3,7 @@
 In January, the first week back after the holiday break, we spend a week on the Adafruit
 CLUE: a small board with a screen, Bluetooth, and a dozen sensors. You will learn how the
 electronics work and build a project of your own. This list gets you ready. Everything on
-it is free except the books, and the books are optional.
+it is free except one book at the very end, which you do not need.
 
 An hour or two a week between now and January is plenty. Do the setup first.
 
@@ -37,9 +37,9 @@ everywhere is built this way, and the habits outlast any one project:
 
 The CLUE runs C++, but only a part of it. Templates, exceptions, inheritance and the
 standard library containers take up much of any C++ book, and they can all wait. These
-lessons from [learncpp.com](https://www.learncpp.com/) cover what the board uses, about
-ten minutes each; skip everything else on the site for now. The lesson numbers are the
-site's own.
+lessons from [learncpp.com](https://www.learncpp.com/) were picked to match what the
+board's code uses, topic by topic; skip everything else on the site for now. The lesson
+numbers are the site's own.
 
 learncpp's examples run on a computer and print with `std::cout`; on the board,
 `Serial.print()` and the screen do that job. To try an example, paste it into an online
@@ -99,13 +99,12 @@ libraries' objects, like `display.print()`, which is a member function of a clas
 else wrote.
 
 If you already program in another language, skim the list for what is different in C++.
-If you like paper, *Programming Arduino: Getting Started with Sketches* by Simon Monk
-covers the same ground. Keep the [Arduino language reference](https://docs.arduino.cc/language-reference/)
-handy for board functions like `digitalWrite()` and `millis()`.
+Keep the [Arduino language reference](https://docs.arduino.cc/language-reference/) handy
+for board functions like `digitalWrite()` and `millis()`.
 
 ## 3. Electronics
 
-Short SparkFun tutorials, grouped by the lecture they set up. Ten to twenty minutes each.
+Short SparkFun tutorials, picked by topic and grouped by the lecture they set up.
 
 **Lecture 1, electricity:**
 [What is a Circuit?](https://learn.sparkfun.com/tutorials/what-is-a-circuit),
@@ -138,23 +137,16 @@ Adafruit's [Introduction to Bluetooth Low Energy](https://learn.adafruit.com/int
 [Capacitors](https://learn.sparkfun.com/tutorials/capacitors), since so many sensors turn
 out to be one.
 
-## 4. One book for the break (optional, pick one)
-
-- *Code: The Hidden Language of Computer Hardware and Software* by Charles Petzold
-  (2nd edition). How a computer works, from switches and flashlights up to a processor.
-  The best single book for this class.
-- *Make: Electronics* by Charles Platt (3rd edition). Learn electronics by building small
-  circuits, one experiment at a time.
-- *Getting Started with Bluetooth Low Energy* by Kevin Townsend and others. For anyone who
-  wants to know how the radio part really works.
-
-If you want a full C++ book anyway: *Programming: Principles and Practice Using C++* by
-Bjarne Stroustrup, who invented the language. It is long, and most of it goes beyond what
-the board uses.
-
-## 5. Watch
+## 4. Watch
 
 - [Visualizing quaternions](https://eater.net/quaternions), by Ben Eater and 3Blue1Brown:
   the math behind how the board knows which way it is pointing.
 - Adafruit's [Guide to Excellent Soldering](https://learn.adafruit.com/adafruit-guide-excellent-soldering),
   before you pick up an iron.
+
+## 5. You don't really need this
+
+*Programming: Principles and Practice Using C++* by Bjarne Stroustrup, who invented the
+language. It is a full course in C++, it is long, and most of it goes beyond what the
+board uses. Everything this class needs is in the short list above; this is for anyone
+who wants the whole language.
