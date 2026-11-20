@@ -42,16 +42,13 @@ and most of the time building something of their own.
 - **Laptops:** everyone needs one, Windows or Mac, with a USB-C port. The CLUE's port is
   micro-USB, so the class cables are USB-C to micro-USB; anyone with only USB-A ports gets
   one of the spare USB-A cables.
-- **Your own or school-managed?** School laptops often block installing software and
-  sometimes block Bluetooth, which would stop everything. A Chromebook or an iPad cannot
-  run the Arduino IDE.
 - **Browser:** the class page needs Chrome or Edge.
 - **Phones:** iPhone or Android? Both run nRF Connect and Bluefruit Connect for poking at
   the board over Bluetooth. Chrome on Android can also open the class page; on an iPhone,
   use the apps.
 - **GitHub:** anyone have an account? Everyone needs one: each student forks the class
   repository and commits their work to their own copy, so the week also teaches version
-  control. Check that a school laptop will install GitHub Desktop.
+  control.
 - **The week:** hours each day, working alone or in pairs, and a demo at the end: who
   comes to see it?
 - **Over the break:** how to reach each other with questions.
