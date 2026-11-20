@@ -10,7 +10,7 @@ question to put to the class. The pinout, schematic and every datasheet are in
 Five 45-minute lectures, each three to five short blocks with a demo in each. The minutes
 are a starting budget, not a script.
 
-1. **Electricity you can hold**
+1. **Circuit basics**
    - Voltage, current and ground (10 min)
    - Resistors and V = I × R, with an LED (15 min)
    - Pin outputs: high, low and high-Z, and transistors as switches (15 min)
@@ -40,7 +40,7 @@ leaving binary, sensor quality and datasheets for when they come up during proje
 The physics blocks each stand alone, so without a fifth slot they can open project days,
 one a morning. Quaternions and PCBs are their own sessions; see the end.
 
-# Lecture 1: Electricity you can hold
+# Lecture 1: Circuit basics
 
 ## Voltage, current and ground
 
