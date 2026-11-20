@@ -8,7 +8,8 @@ question to put to the class. The pinout, schematic and every datasheet are in
 ## Lecture plan
 
 Five 45-minute lectures, each three to five short blocks with a demo in each. The minutes
-are a starting budget, not a script.
+are a starting budget, not a script. Before the first, a ten to fifteen minute intro: how
+I got started, hack weeks, and the TechDisc.
 
 1. **Circuit basics**
    - Voltage, current and ground (10 min)
@@ -39,6 +40,64 @@ For three lectures, keep 1 and 4 and merge 2 and 3: pull-ups, analog in, and I2C
 leaving binary, sensor quality and datasheets for when they come up during project time.
 The physics blocks each stand alone, so without a fifth slot they can open project days,
 one a morning. Quaternions and PCBs are their own sessions; see the end.
+
+# Intro: how I got here
+
+Ten to fifteen minutes before lecture 1. It is not a résumé. The points are that nobody
+starts out knowing this, that the first things anyone builds are small and a bit broken,
+and that a product people buy is made of the same topics as this week. The lines marked
+*fill in* are mine to write; the rest is the shape.
+
+## Getting started with electronics
+
+**The idea:** nobody starts by knowing this.
+
+- *Fill in:* the first thing I built, how old I was, and what was wrong with it.
+- *Fill in:* the first time something clicked: a part, a book, a kit, a person.
+- *Fill in:* a mistake that cost a part or a week, and what it taught.
+- *Fill in:* what I would tell myself then.
+
+**Show:** the thing itself, or a photo of it, if it still exists.
+
+**Ask:** what is the last thing you took apart?
+
+## Hack weeks
+
+**The idea:** a week is enough to build something real, if the goal is small and there is
+a demo at the end. This class is one.
+
+- *Fill in:* two or three hack week projects: what each was, what worked by midweek, and
+  what the demo was.
+- *Fill in:* one that did not work, and why.
+- *Fill in:* what a hack week teaches. Candidates: cut the goal down early; show something
+  small that works over something big that almost does; write down what you would do
+  next. The questions at the end of [`PROJECTS.md`](PROJECTS.md) are the same advice.
+- *Fill in:* the shape of this week: when the lectures are, when project time is, and when
+  the demo is.
+
+**Ask:** what would you build with one week and no grade?
+
+## The TechDisc
+
+**The idea:** a real product made of the same parts as the board in your hand.
+
+- *Fill in:* what it is, who uses it and what it measures, in two sentences.
+- *Fill in:* how it started, and what the first prototype was made of.
+- What is inside, in this week's words: motion sensors (lecture 2, and day 1's
+  orientation), a processor running a loop (lecture 4), Bluetooth to a phone or a laptop
+  (lecture 4), a battery, and a board designed for it (the PCB session).
+- Three places it comes back this week:
+  - It puts its sensors on SPI where the CLUE uses I2C. Lecture 3 asks why.
+  - Its debug page packs every motion reading into one Bluetooth packet, where the CLUE's
+    page gives each reading its own. Lecture 4 asks which is better, and when.
+  - A spin meter is one of the project ideas, and the TechDisc is the thing to check it
+    against.
+- *Fill in:* the hardest bug, and how it was found.
+- *Fill in:* what changed between the prototype and the one that ships.
+
+**Demo:** throw it, or spin it on a table, with its page up next to the CLUE's.
+
+**Ask:** what would you have to measure to say how well a disc was thrown?
 
 # Lecture 1: Circuit basics
 
