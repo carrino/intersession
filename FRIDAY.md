@@ -61,38 +61,40 @@ and most of the time building something of their own.
 ## The parts list
 
 Prices are from the order. The AMG8833 thermal camera was out of stock at Adafruit and is
-coming from Digi-Key.
+coming from Digi-Key. Each part's name links to its page, with pictures and what it can
+do.
 
 **Sensors and inputs**
 
 | Part | What it does | A project | Qty | Price |
 | --- | --- | --- | --- | --- |
-| VL53L1X | Distance by timing light: about 3 m indoors off a light wall, less in sunlight | Theremin, parking sensor | 1 | $14.95 |
-| MPR121 | 12 capacitive touch inputs, alligator-clip pads | Fruit piano, touch keyboard | 3 | $6.95 |
-| ANO encoder | Dial with five buttons | Menus, a game controller | 2 | $13.95 |
-| PA1010D | GPS | Track a walk; needs a window or outdoors | 1 | $29.95 |
-| SCD-43 | True CO2, temperature, humidity | Room air monitor that says "open a window" | 1 | $49.95 |
-| LTR390 | UV and light | Sunburn meter | 1 | $4.95 |
-| MLX90632 | Non-contact temperature | Point-and-shoot thermometer | 1 | $17.50 |
-| AMG8833 | An 8×8 picture of temperature, ten times a second | Thermal camera, a hand tracker, a rover that follows you | 1 | Digi-Key |
+| [VL53L1X](https://www.adafruit.com/product/3967) | Distance by timing light: about 3 m indoors off a light wall, less in sunlight | Theremin, parking sensor | 1 | $14.95 |
+| [MPR121](https://www.adafruit.com/product/4830) | 12 capacitive touch inputs, alligator-clip pads | Fruit piano, touch keyboard | 3 | $6.95 |
+| [ANO encoder](https://www.adafruit.com/product/6310) | Dial with five buttons | Menus, a game controller | 2 | $13.95 |
+| [PA1010D](https://www.adafruit.com/product/4415) | GPS | Track a walk; needs a window or outdoors | 1 | $29.95 |
+| [SCD-43](https://www.adafruit.com/product/6512) | True CO2, temperature, humidity | Room air monitor that says "open a window" | 1 | $49.95 |
+| [LTR390](https://www.adafruit.com/product/4831) | UV and light | Sunburn meter | 1 | $4.95 |
+| [MLX90632](https://www.adafruit.com/product/6403) | Non-contact temperature | Point-and-shoot thermometer | 1 | $17.50 |
+| [AMG8833](https://www.adafruit.com/product/3538) | An 8×8 picture of temperature, ten times a second | Thermal camera, a hand tracker, a rover that follows you | 1 | Digi-Key |
 
 **Things that light up or move**
 
 | Part | What it does | A project | Qty | Price |
 | --- | --- | --- | --- | --- |
-| DRV2605L + motor disc | Haptic buzzes, 100+ built-in effects | Buzzing compass, silent alarm | 2 | $7.95 + $1.95 |
-| NeoPixel ring, 16 | Round ring of color LEDs | A compass ring that lights north | 2 | $9.95 |
-| NeoPixel ring, 12 | Smaller ring | A clock, a level | 1 | $8.95 |
-| NeoPixel stick, 8 RGBW | A bar with a true white LED in each pixel | A desk lamp you can dim | 2 | $7.95 |
-| NeoDriver | Drives a NeoPixel strip over I2C, with 5 V data | A meter-long light strip | 2 | $7.50 |
-| IS31FL3741 | 13×9 RGB LED matrix | Scrolling text, snake, a sensor graph | 1 | $14.95 |
+| [DRV2605L](https://www.adafruit.com/product/2305) + [motor disc](https://www.adafruit.com/product/1201) | Haptic buzzes, 100+ built-in effects | Buzzing compass, silent alarm | 2 | $7.95 + $1.95 |
+| [NeoPixel ring, 16](https://www.adafruit.com/product/1463) | Round ring of color LEDs | A compass ring that lights north | 2 | $9.95 |
+| [NeoPixel ring, 12](https://www.adafruit.com/product/1643) | Smaller ring | A clock, a level | 1 | $8.95 |
+| [NeoPixel stick, 8 RGBW](https://www.adafruit.com/product/2868) | A bar with a true white LED in each pixel | A desk lamp you can dim | 2 | $7.95 |
+| [NeoDriver](https://www.adafruit.com/product/5766) | Drives a NeoPixel strip over I2C, with 5 V data | A meter-long light strip | 2 | $7.50 |
+| [IS31FL3741](https://www.adafruit.com/product/5201) | 13×9 RGB LED matrix | Scrolling text, snake, a sensor graph | 1 | $14.95 |
 | Micro servo | Moves something, on pads 0 to 2 | A sensor that points or waves | not ordered | |
 
-**Power and supplies:** five 3×AAA holders, three 1200 mAh LiPo batteries (which need a
-separate charger: the CLUE cannot charge them), a 5 V 2 A supply for the LED strips with a
-barrel jack to screw terminal adapter, thirteen STEMMA QT cables (50, 200 and 400 mm) and
-four that end in header pins for a breadboard, alligator clips, conductive fabric, a flux
-pen. Adafruit also sent a free KB2040 (an RP2040 board).
+**Power and supplies:** five [3×AAA holders](https://www.adafruit.com/product/727), three
+[1200 mAh LiPo batteries](https://www.adafruit.com/product/258) (charged on a Feather board: the CLUE cannot charge
+them), a [5 V 2 A supply](https://www.adafruit.com/product/276) for the LED strips with a barrel jack to screw terminal
+adapter, thirteen STEMMA QT cables (50, 200 and 400 mm) and four that end in header pins
+for a breadboard, alligator clips, conductive fabric, a flux pen. Adafruit also sent a
+free KB2040 (an RP2040 board).
 
 ## After the meeting
 

@@ -3,8 +3,9 @@
 Seeds for Friday's conversation and the week. A good week-long project has a small core
 that works by the middle of the week, a demo anyone can try at the end, and stretch goals
 for the time in between. Most of these work with only what is on the CLUE; the rest need
-one part from the list in [`FRIDAY.md`](FRIDAY.md). Some build on a tab of day 1's sketch
-that already does the hard part, named where they do.
+one part from the list in [`FRIDAY.md`](FRIDAY.md), where each part links to its page.
+Some build on a tab of day 1's sketch that already does the hard part, named where they
+do.
 
 ## With just the CLUE
 
@@ -69,8 +70,9 @@ that already does the hard part, named where they do.
 
 ## With the rover
 
-A two-wheeled chassis with the CLUE riding on top. It needs the chassis kit, the motor
-bonnet and a 4×AA holder, which are on the list to order but not bought yet. The rover
+A two-wheeled chassis with the CLUE riding on top. It needs the
+[chassis kit](https://www.adafruit.com/product/2939), the [motor bonnet](https://www.adafruit.com/product/4280) and a [4×AA holder](https://www.adafruit.com/product/830), which are
+on the list to order but not bought yet. The rover
 has no wheel sensors, so it cannot tell how far it has gone; the CLUE's gyro tells it
 which way it is facing, and that is what all of these lean on. The motors have magnets in
 them, so the compass will not be trusted here: heading comes from the gyro alone.
@@ -87,7 +89,7 @@ them, so the compass will not be trusted here: heading comes from the gyro alone
 
 ## With the thermal camera
 
-An AMG8833: an 8×8 picture of temperature, ten times a second, from 0 to 80 °C. It was
+An [AMG8833](https://www.adafruit.com/product/3538): an 8×8 picture of temperature, ten times a second, from 0 to 80 °C. It was
 out of stock for the first order and is coming from Digi-Key. Eight by eight is coarse: a
 person across the room is a few warm squares. It reads to a quarter of a degree, but
 only within about 2.5 °C of the true temperature, so it shows what is warmer than what,
